@@ -37,6 +37,10 @@ from ..config import (
     USE_PLAYWRIGHT,
     XAI_API_KEY,
     XAI_MODEL,
+    LANGSMITH_TRACING,
+    LANGSMITH_ENDPOINT,
+    LANGSMITH_API_KEY,
+    LANGSMITH_PROJECT
 )
 from .statistics import run_statistics as _run_stats, decide
 
@@ -49,7 +53,8 @@ def _build_llm():
 
     from langchain_openai import ChatOpenAI
 
-    kwargs = {"model": OPENAI_MODEL, "api_key": OPENAI_API_KEY, "temperature": 0}
+    kwargs = {"model": OPENAI_MODEL,
+              "api_key": OPENAI_API_KEY, "temperature": 0}
     if OPENAI_BASE_URL:
         kwargs["base_url"] = OPENAI_BASE_URL
     return ChatOpenAI(**kwargs)
@@ -105,10 +110,12 @@ async def _load_playwright_tools():
             }
         )
         _browser_tools = await client.get_tools()
-        print(f"[agent] Loaded {len(_browser_tools)} Playwright browser tools.")
+        print(
+            f"[agent] Loaded {len(_browser_tools)} Playwright browser tools.")
         return _browser_tools
     except Exception as err:  # noqa: BLE001
-        print(f"[agent] Playwright MCP unavailable, chat-only inference: {err}")
+        print(
+            f"[agent] Playwright MCP unavailable, chat-only inference: {err}")
         return []  # not cached — allow a later retry to succeed
 
 
@@ -226,10 +233,12 @@ async def build_agent(exp: dict):
 
     llm = _build_llm()
     if _sql_tools is None:
-        _sql_tools = SQLDatabaseToolkit(db=_build_sql_db(), llm=llm).get_tools()
+        _sql_tools = SQLDatabaseToolkit(
+            db=_build_sql_db(), llm=llm).get_tools()
 
     browser_tools = await _load_playwright_tools()
-    tools = [*_sql_tools, *browser_tools, run_statistics, make_decision_tool(capture)]
+    tools = [*_sql_tools, *browser_tools,
+             run_statistics, make_decision_tool(capture)]
 
     agent = create_react_agent(
         llm,
@@ -246,7 +255,8 @@ async def chat_turn(exp: dict, message: str) -> dict:
     agent, capture, _ = await build_agent(exp)
     result = await agent.ainvoke(
         {"messages": [("user", message)]},
-        config={"configurable": {"thread_id": exp["id"]}, "recursion_limit": 25},
+        config={"configurable": {
+            "thread_id": exp["id"]}, "recursion_limit": 25},
     )
     reply = result["messages"][-1].content
     return {"reply": reply, "decision": capture["decision"]}
@@ -257,8 +267,10 @@ async def analyze_experiment(exp: dict) -> dict:
     full workflow and return a decision."""
     agent, capture, _ = await build_agent(exp)
     await agent.ainvoke(
-        {"messages": [("user", "Analyze this experiment now and submit a decision.")]},
-        config={"configurable": {"thread_id": f"{exp['id']}:analyze"}, "recursion_limit": 25},
+        {"messages": [
+            ("user", "Analyze this experiment now and submit a decision.")]},
+        config={"configurable": {
+            "thread_id": f"{exp['id']}:analyze"}, "recursion_limit": 25},
     )
     if capture["decision"] is None:
         raise RuntimeError("agent did not submit a decision")

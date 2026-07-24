@@ -1,3 +1,7 @@
+from dotenv import load_dotenv
+
+load_dotenv()  # before LangChain imports so LangSmith env vars are visible locally
+
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
