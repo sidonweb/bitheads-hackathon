@@ -3,6 +3,7 @@ from sqlalchemy import text
 from ..db import engine
 from ..schemas import ExperimentIn, ExperimentPatch
 from ..metrics.event_matrix import build_event_matrix
+from ..metrics.eval_telemetry import log_event
 
 router = APIRouter()
 
@@ -156,4 +157,22 @@ def patch_experiment(experiment_id: str, patch: ExperimentPatch):
         ).mappings().first()
     if row is None:
         raise HTTPException(status_code=404, detail="not found")
+
+    if patch.primaryMetric is not None:
+        log_event(
+            experiment_id,
+            "config_accepted",
+            {"primaryMetric": patch.primaryMetric},
+        )
+
+    if patch.trafficSplit is not None and patch.trafficSplit in (0, 100):
+        log_event(
+            experiment_id,
+            "recommendation_applied",
+            {
+                "trafficSplit": patch.trafficSplit,
+                "decision": "Scale" if patch.trafficSplit == 100 else "Rollback",
+            },
+        )
+
     return {"experiment": dict(row)}

@@ -1318,3 +1318,201 @@ code {
   color: var(--text-secondary);
   font-style: italic;
 }
+
+/* Agent eval dashboard */
+.eval-dashboard-app {
+  display: block;
+  height: 100vh;
+  overflow: auto;
+}
+
+.eval-main-panel {
+  max-width: 1200px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.eval-dashboard-content {
+  padding: 24px 32px 48px;
+  overflow-y: auto;
+}
+
+.eval-intro {
+  color: var(--text-secondary);
+  font-size: 14px;
+  margin: 0 0 24px;
+}
+
+.eval-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+  margin-bottom: 32px;
+}
+
+.eval-metric-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  box-shadow: var(--shadow);
+}
+
+.eval-metric-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.eval-metric-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  flex: 1;
+  min-width: 0;
+}
+
+.eval-metric-info-wrap {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.eval-metric-info {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 700;
+  font-style: italic;
+  font-family: Georgia, 'Times New Roman', serif;
+  line-height: 1;
+  cursor: help;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.eval-metric-info:hover,
+.eval-metric-info:focus-visible {
+  color: var(--accent);
+  border-color: var(--accent);
+  outline: none;
+}
+
+.eval-metric-tooltip {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 20;
+  width: max-content;
+  max-width: 240px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--text);
+  color: var(--surface);
+  font-size: 11px;
+  font-weight: 400;
+  font-style: normal;
+  line-height: 1.45;
+  text-transform: none;
+  letter-spacing: normal;
+  box-shadow: var(--shadow-lg);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.15s ease, visibility 0.15s ease;
+}
+
+.eval-metric-info-wrap:hover .eval-metric-tooltip,
+.eval-metric-info-wrap:focus-within .eval-metric-tooltip {
+  opacity: 1;
+  visibility: visible;
+}
+
+.eval-metric-value {
+  margin: 0;
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--accent);
+  line-height: 1.2;
+}
+
+.eval-metric-subtitle {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.eval-chart-section,
+.eval-recent-section {
+  margin-bottom: 32px;
+}
+
+.eval-chart-section h2,
+.eval-recent-section h2 {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0 0 12px;
+}
+
+.eval-chart-wrap {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+}
+
+.eval-events-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.eval-events-table th,
+.eval-events-table td {
+  padding: 10px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+
+.eval-events-table th {
+  background: var(--bg);
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.eval-events-table tr:last-child td {
+  border-bottom: none;
+}
+
+.eval-events-table code {
+  font-size: 12px;
+  background: var(--code-bg);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.eval-error {
+  color: var(--error);
+  margin-bottom: 16px;
+}
+
+.eval-loading,
+.eval-empty {
+  color: var(--text-secondary);
+  font-size: 14px;
+}

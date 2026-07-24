@@ -1,9 +1,12 @@
+import time
+
 from fastapi import APIRouter, HTTPException
 from sqlalchemy import text
 
 from ..agent.graph import analyze_experiment
 from ..agent.guardrails import AgentError, http_status_for
 from ..db import engine
+from ..metrics.eval_telemetry import build_analysis_eval_payload, log_event
 from ..schemas_agent import AnalyzeIn, ChatMeta
 from ..sdui.pipeline import assemble_analyze_blocks
 from ..sdui.schema import SDUI_VERSION
@@ -31,6 +34,7 @@ async def analyze(experiment_id: str, body: AnalyzeIn):
 
     exp_dict = dict(exp)
 
+    started = time.perf_counter()
     try:
         decision = await analyze_experiment(
             exp_dict,
@@ -49,10 +53,23 @@ async def analyze(experiment_id: str, body: AnalyzeIn):
                 }
             },
         ) from err
+    duration_ms = int((time.perf_counter() - started) * 1000)
 
     print(
         f"[analyze] {experiment_id} -> {decision['decision']} "
         f"(metric: {decision.get('inferred_metric')}, sql: {decision['sql_used']})"
+    )
+
+    eval_payload = build_analysis_eval_payload(
+        decision,
+        duration_ms,
+        experiment_id=experiment_id,
+    )
+    log_event(
+        experiment_id,
+        "analysis_completed",
+        eval_payload,
+        duration_ms=duration_ms,
     )
 
     reply = decision.get("reasoning") or "Analysis complete."

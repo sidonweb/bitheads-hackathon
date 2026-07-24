@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { logEvalEvent } from '../api/evals.js';
 import { generateHypothesis, saveHypothesis } from '../api/lifecycle.js';
 
 const GOAL_MAX = 2000;
@@ -20,6 +21,7 @@ export default function HypothesisPanel({
   const [saving, setSaving] = useState(false);
   const [llmWarning, setLlmWarning] = useState('');
   const [hasDraft, setHasDraft] = useState(false);
+  const creationStartedAt = useRef(null);
 
   useEffect(() => {
     if (!experiment) return;
@@ -31,6 +33,10 @@ export default function HypothesisPanel({
 
   const handleGenerate = async () => {
     if (!businessGoal.trim() || generating) return;
+    if (!creationStartedAt.current) {
+      creationStartedAt.current = Date.now();
+      logEvalEvent({ eventType: 'creation_started' }).catch(() => {});
+    }
     setGenerating(true);
     setError('');
     setLlmWarning('');
@@ -70,6 +76,15 @@ export default function HypothesisPanel({
       });
       await onSaved?.();
       setHasDraft(false);
+      if (creationStartedAt.current) {
+        const durationMs = Date.now() - creationStartedAt.current;
+        logEvalEvent({
+          eventType: 'creation_completed',
+          durationMs,
+          payload: { durationMs },
+        }).catch(() => {});
+        creationStartedAt.current = null;
+      }
     } catch (e) {
       setError(e.message);
     } finally {

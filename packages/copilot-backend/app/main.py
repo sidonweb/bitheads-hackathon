@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .routes import experiments, analyze, chat, demo, lifecycle
+from .routes import experiments, analyze, chat, demo, lifecycle, evals
 from .agent.graph import _load_playwright_tools
 
 
@@ -39,3 +39,4 @@ app.include_router(analyze.router)
 app.include_router(chat.router)
 app.include_router(demo.router)
 app.include_router(lifecycle.router)
+app.include_router(evals.router)

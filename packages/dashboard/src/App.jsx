@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
   getExperiment,
   setTrafficSplit,
@@ -24,6 +25,7 @@ import { MoonIcon, SunIcon } from './components/Icons.jsx';
 import { DeleteSessionModal, RenameSessionModal } from './components/SessionModals.jsx';
 import { readTheme, saveTheme, applyTheme } from './lib/theme.js';
 import { readAutoRefresh, saveAutoRefresh } from './lib/metricsPrefs.js';
+import { logEvalEvent } from './api/evals.js';
 
 const SESSIONS_KEY = 'copilot_chat_sessions_v1';
 const METRICS_POLL_INTERVAL_MS = Number(import.meta.env.VITE_METRICS_POLL_MS) || 30_000;
@@ -279,6 +281,13 @@ export default function App() {
           ? 'Variant B is now at 100% traffic.'
           : 'Reverted to 100% Variant A.',
       );
+      logEvalEvent({
+        eventType: 'recommendation_applied',
+        payload: {
+          decision: decision.decision,
+          trafficSplit: targetSplit,
+        },
+      }).catch(() => {});
       load();
     } catch (e) {
       setApplyState('error');
@@ -420,6 +429,7 @@ export default function App() {
             >
               {theme === 'light' ? <MoonIcon /> : <SunIcon />}
             </button>
+            <Link to="/evals" className="btn btn-ghost">Agent Evals</Link>
             <button type="button" className="btn btn-ghost" onClick={() => setDrawerOpen(true)}>
               Experiment
             </button>

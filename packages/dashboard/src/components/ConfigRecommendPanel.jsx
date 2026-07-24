@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { recommendConfig, savePrimaryMetric } from '../api/lifecycle.js';
+import { logEvalEvent } from '../api/evals.js';
 
 export default function ConfigRecommendPanel({
   experimentId,
@@ -22,6 +23,12 @@ export default function ConfigRecommendPanel({
   }, [variantAUrl, variantBUrl]);
 
   const handleRecommend = async () => {
+    if (recommendation && !accepted) {
+      logEvalEvent({
+        eventType: 'config_rejected',
+        payload: { recommendedMetric: recommendation.primaryMetric?.eventName },
+      }).catch(() => {});
+    }
     setLoading(true);
     setError('');
     setAccepted(false);

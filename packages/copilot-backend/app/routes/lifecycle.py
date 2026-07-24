@@ -28,6 +28,7 @@ from ..services.hypothesis import (
     hypothesis_rate_limiter,
 )
 from ..services.preflight import run_preflight
+from ..metrics.eval_telemetry import log_event
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -123,6 +124,20 @@ async def generate_hypothesis_route(
     return result
 
 
+def _log_config_recommended(experiment_id: str, result) -> None:
+    metric = ""
+    if result.primaryMetric:
+        metric = result.primaryMetric.eventName or ""
+    log_event(
+        experiment_id,
+        "config_recommended",
+        {
+            "recommendedMetric": metric,
+            "availableEvents": result.availableEvents or [],
+        },
+    )
+
+
 @router.post(
     "/experiments/{experiment_id}/recommend-config",
     response_model=RecommendConfigOut,
@@ -180,6 +195,7 @@ async def recommend_config_route(
             },
         )
 
+    _log_config_recommended(experiment_id, result)
     return result
 
 
