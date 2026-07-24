@@ -23,6 +23,7 @@ class ExperimentPatch(BaseModel):
 
 class ChatIn(BaseModel):
     message: str
+    sessionId: Optional[str] = None  # isolates each conversation's history
 
 
 class SampleSize(BaseModel):

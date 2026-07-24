@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getExperiment, setTrafficSplit, EXPERIMENT_ID } from './api.js';
+import { getExperiment, setTrafficSplit, newSessionId, EXPERIMENT_ID } from './api.js';
 import CopilotIcon from './components/CopilotIcon.jsx';
 import ChatPanel from './components/ChatPanel.jsx';
 import ExperimentDrawer from './components/ExperimentDrawer.jsx';
@@ -13,6 +13,7 @@ export default function App() {
   const [error, setError] = useState('');
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [theme, setTheme] = useState(readTheme);
+  const [sessionId, setSessionId] = useState(newSessionId);
 
   const load = () =>
     getExperiment()
@@ -34,6 +35,14 @@ export default function App() {
   };
 
   const onDecision = (d) => { setDecision(d); load(); };
+
+  // Start a fresh, isolated conversation: new session id + clear the verdict.
+  // The changed `key` on ChatPanel remounts it, wiping the chat history too.
+  const startNewTest = () => {
+    setSessionId(newSessionId());
+    setDecision(null);
+    setError('');
+  };
 
   if (!exp) {
     return (
@@ -61,13 +70,16 @@ export default function App() {
           >
             {theme === 'light' ? '🌙' : '☀️'}
           </button>
+          <button type="button" className="btn btn-ghost" onClick={startNewTest} title="Start a fresh test session">
+            + New Test
+          </button>
           <button type="button" className="btn btn-ghost" onClick={() => setDrawerOpen(true)}>
             Experiment
           </button>
         </div>
       </header>
 
-      <ChatPanel experiment={exp} onDecision={onDecision} decision={decision} />
+      <ChatPanel key={sessionId} sessionId={sessionId} experiment={exp} onDecision={onDecision} decision={decision} />
 
       <ExperimentDrawer
         open={drawerOpen}

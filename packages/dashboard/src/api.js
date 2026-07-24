@@ -26,16 +26,22 @@ export async function analyze(id = EXPERIMENT_ID) {
   return res.json();
 }
 
-// One conversational turn with the copilot. Returns { reply, decision? }.
-export async function chat(message, id = EXPERIMENT_ID) {
+// One conversational turn with the copilot. sessionId isolates this test's
+// history from other tests. Returns { reply, decision? }.
+export async function chat(message, sessionId, id = EXPERIMENT_ID) {
   const res = await fetch(`${API_BASE}/experiments/${id}/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message }),
+    body: JSON.stringify({ message, sessionId }),
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.detail || body.error || 'chat failed');
   }
   return res.json();
+}
+
+// A fresh, unique session id — used by "New Test" to start a clean conversation.
+export function newSessionId() {
+  return `s_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }
