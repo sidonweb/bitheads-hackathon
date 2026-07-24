@@ -1,25 +1,34 @@
 import { useState, useRef, useEffect } from 'react';
 import { chat } from '../api.js';
+import CopilotIcon from './CopilotIcon.jsx';
+import Decision from './Decision.jsx';
 
-// Conversational panel: the PM discusses the A/B change with the copilot and asks
-// for a recommendation. When the agent completes an analysis, it hands the
-// structured decision up to the parent via onDecision (rendered as a card).
-export default function ChatPanel({ experiment, onDecision }) {
-  const seed = experiment?.variant_b_url
-    ? `Try: "Compare ${experiment.variant_a_url} vs ${experiment.variant_b_url} and tell me what changed, then recommend."`
-    : 'Ask the copilot to analyze the experiment and recommend a decision.';
+function buildSuggestions(experiment) {
+  if (!experiment?.variant_a_name || !experiment?.variant_b_name) {
+    return [
+      'Analyze the experiment and recommend a decision',
+      'What metric should we use to judge success?',
+    ];
+  }
+  return [
+    `Is ${experiment.variant_b_name} beating ${experiment.variant_a_name}?`,
+    'Compare both variants and tell me what changed',
+    'Should we roll out variant B to everyone?',
+  ];
+}
 
-  const [messages, setMessages] = useState([
-    { role: 'assistant', text: `Hi — I'm your Experiment Copilot. ${seed}` },
-  ]);
+export default function ChatPanel({ experiment, onDecision, decision }) {
+  const suggestions = buildSuggestions(experiment);
+  const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
   const endRef = useRef(null);
+  const hasUserMessages = messages.some((m) => m.role === 'user');
 
-  useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages, busy]);
+  useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages, busy, decision]);
 
-  const send = async () => {
-    const text = input.trim();
+  const send = async (textOverride) => {
+    const text = (textOverride ?? input).trim();
     if (!text || busy) return;
     setInput('');
     setMessages((m) => [...m, { role: 'user', text }]);
@@ -29,7 +38,7 @@ export default function ChatPanel({ experiment, onDecision }) {
       setMessages((m) => [...m, { role: 'assistant', text: res.reply }]);
       if (res.decision) onDecision?.(res.decision);
     } catch (e) {
-      setMessages((m) => [...m, { role: 'assistant', text: `⚠ ${e.message}`, error: true }]);
+      setMessages((m) => [...m, { role: 'assistant', text: `Something went wrong: ${e.message}`, error: true }]);
     } finally {
       setBusy(false);
     }
@@ -40,32 +49,85 @@ export default function ChatPanel({ experiment, onDecision }) {
   };
 
   return (
-    <div className="chat">
-      <div className="chat-log">
-        {messages.map((m, i) => (
-          <div key={i} className={`msg ${m.role}${m.error ? ' error' : ''}`}>
-            <div className="msg-role">{m.role === 'user' ? 'You' : 'Copilot'}</div>
-            <div className="msg-text">{m.text}</div>
-          </div>
-        ))}
-        {busy && (
-          <div className="msg assistant">
-            <div className="msg-role">Copilot</div>
-            <div className="msg-text thinking">analyzing… (opening variant pages, querying events)</div>
+    <div className="copilot-chat">
+      <div className="chat-scroll">
+        {!hasUserMessages && (
+          <div className="welcome">
+            <div className="welcome-icon"><CopilotIcon size={48} /></div>
+            <h1>What would you like to analyze today?</h1>
+            <p className="welcome-sub">
+              I can compare variants, explain what&apos;s different, and recommend whether to scale, iterate, or stop.
+            </p>
+            <div className="suggestions">
+              {suggestions.map((s) => (
+                <button key={s} type="button" className="suggestion-chip" onClick={() => send(s)}>
+                  {s}
+                </button>
+              ))}
+            </div>
           </div>
         )}
+
+        {messages.map((m, i) => (
+          <div key={i} className={`turn ${m.role}${m.error ? ' error' : ''}`}>
+            {m.role === 'assistant' && (
+              <div className="turn-avatar"><CopilotIcon size={24} /></div>
+            )}
+            <div className="turn-body">
+              {m.role === 'user' ? (
+                <div className="user-bubble">{m.text}</div>
+              ) : (
+                <div className="assistant-text">{m.text}</div>
+              )}
+            </div>
+          </div>
+        ))}
+
+        {busy && (
+          <div className="turn assistant">
+            <div className="turn-avatar"><CopilotIcon size={24} /></div>
+            <div className="turn-body">
+              <div className="assistant-text thinking">
+                <span className="typing-dots"><span /><span /><span /></span>
+                Analyzing variants and querying experiment data…
+              </div>
+            </div>
+          </div>
+        )}
+
+        {decision && (
+          <div className="turn assistant">
+            <div className="turn-avatar"><CopilotIcon size={24} /></div>
+            <div className="turn-body turn-card">
+              <Decision decision={decision} />
+            </div>
+          </div>
+        )}
+
         <div ref={endRef} />
       </div>
-      <div className="chat-input">
-        <textarea
-          rows={2}
-          value={input}
-          placeholder="Describe the A/B change or ask for a recommendation…"
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={onKey}
-          disabled={busy}
-        />
-        <button className="btn" onClick={send} disabled={busy}>Send</button>
+
+      <div className="composer-wrap">
+        <div className="composer">
+          <textarea
+            rows={1}
+            value={input}
+            placeholder="Message Copilot"
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={onKey}
+            disabled={busy}
+          />
+          <button
+            type="button"
+            className="composer-send"
+            onClick={() => send()}
+            disabled={busy || !input.trim()}
+            aria-label="Send message"
+          >
+            ↑
+          </button>
+        </div>
+        <p className="composer-note">Copilot can make mistakes. Verify recommendations before shipping.</p>
       </div>
     </div>
   );

@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { getExperiment, setTrafficSplit, EXPERIMENT_ID } from './api.js';
-import Metrics from './components/Metrics.jsx';
-import Decision from './components/Decision.jsx';
+import CopilotIcon from './components/CopilotIcon.jsx';
 import ChatPanel from './components/ChatPanel.jsx';
+import ExperimentDrawer from './components/ExperimentDrawer.jsx';
+import { readTheme, saveTheme, applyTheme } from './lib/theme.js';
 
 export default function App() {
   const [exp, setExp] = useState(null);
@@ -10,6 +11,8 @@ export default function App() {
   const [split, setSplit] = useState(50);
   const [decision, setDecision] = useState(null);
   const [error, setError] = useState('');
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [theme, setTheme] = useState(readTheme);
 
   const load = () =>
     getExperiment()
@@ -17,61 +20,66 @@ export default function App() {
       .catch((e) => setError(e.message));
 
   useEffect(() => { load(); }, []);
+  useEffect(() => { applyTheme(theme); }, [theme]);
+
+  const toggleTheme = () => {
+    const next = theme === 'light' ? 'dark' : 'light';
+    setTheme(next);
+    saveTheme(next);
+  };
 
   const onSplitCommit = async (value) => {
     setSplit(value);
     try { await setTrafficSplit(EXPERIMENT_ID, value); } catch (e) { setError(e.message); }
   };
 
-  // When the copilot completes an analysis in chat, render the verdict card + refresh metrics.
   const onDecision = (d) => { setDecision(d); load(); };
 
-  if (!exp) return <div className="app"><p>{error || 'Loading experiment…'}</p></div>;
+  if (!exp) {
+    return (
+      <div className="copilot-app loading">
+        <CopilotIcon size={36} />
+        <p>{error || 'Loading…'}</p>
+      </div>
+    );
+  }
 
   return (
-    <div className="app">
-      <header><h1>🧭 Experiment Copilot</h1></header>
-
-      <section className="panel">
-        <div className="field-label">Experiment</div>
-        <h2>{exp.name}</h2>
-        <p className="hypothesis">“{exp.hypothesis}”</p>
-        <div className="variant-urls">
-          <span>A ({exp.variant_a_name}): {exp.variant_a_url
-            ? <a href={exp.variant_a_url} target="_blank" rel="noreferrer">{exp.variant_a_url}</a>
-            : <em>no url</em>}</span>
-          <span>B ({exp.variant_b_name}): {exp.variant_b_url
-            ? <a href={exp.variant_b_url} target="_blank" rel="noreferrer">{exp.variant_b_url}</a>
-            : <em>no url</em>}</span>
+    <div className="copilot-app">
+      <header className="copilot-header">
+        <div className="brand">
+          <CopilotIcon size={24} />
+          <span className="brand-name">Experiment Copilot</span>
         </div>
-        <div className="meta">
-          Metric: <code>{exp.primary_metric || 'inferred by copilot'}</code> · Status: {exp.status}
+        <div className="header-actions">
+          <button
+            type="button"
+            className="icon-btn theme-toggle"
+            onClick={toggleTheme}
+            aria-label={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
+            title={theme === 'light' ? 'Dark mode' : 'Light mode'}
+          >
+            {theme === 'light' ? '🌙' : '☀️'}
+          </button>
+          <button type="button" className="btn btn-ghost" onClick={() => setDrawerOpen(true)}>
+            Experiment
+          </button>
         </div>
-      </section>
+      </header>
 
-      <section className="panel">
-        <div className="field-label">Traffic allocation to Variant B — {split}%</div>
-        <input
-          type="range" min="0" max="100" value={split}
-          onChange={(e) => setSplit(Number(e.target.value))}
-          onMouseUp={(e) => onSplitCommit(Number(e.target.value))}
-          onTouchEnd={(e) => onSplitCommit(Number(e.target.value))}
-        />
-        <div className="split-labels"><span>A: {100 - split}%</span><span>B: {split}%</span></div>
-      </section>
+      <ChatPanel experiment={exp} onDecision={onDecision} decision={decision} />
 
-      <section className="panel">
-        <div className="field-label">Talk to the Copilot</div>
-        <ChatPanel experiment={exp} onDecision={onDecision} />
-      </section>
-
-      <section className="panel">
-        <Metrics summary={summary} metric={exp.primary_metric || 'conversions'} />
-        <button className="btn refresh" onClick={load}>↻ Refresh metrics</button>
-        {error && <p className="error">⚠ {error}</p>}
-      </section>
-
-      {decision && <Decision decision={decision} />}
+      <ExperimentDrawer
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        split={split}
+        onSplitChange={setSplit}
+        onSplitCommit={onSplitCommit}
+        summary={summary}
+        metric={exp.primary_metric}
+        onRefresh={load}
+        error={error}
+      />
     </div>
   );
 }
