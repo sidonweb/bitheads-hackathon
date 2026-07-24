@@ -1,0 +1,85 @@
+services:
+  postgres:
+    image: postgres:15
+    container_name: copilot_pg
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: copilot
+    ports:
+      - "5432:5432"
+    volumes:
+      - copilot_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d copilot"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ecom-backend OWNS the schema + events. Runs migrations + seed on start.
+  ecom-backend:
+    build: ./packages/ecom-backend
+    container_name: ecom_api
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://ecom_role:ecom_pw@postgres:5432/copilot
+      ADMIN_DATABASE_URL: postgresql://postgres:postgres@postgres:5432/copilot
+      ECOM_WEB_URL: http://ecom-web
+      PORT: "3002"
+      SEED_ON_START: "true"
+    ports:
+      - "3002:3002"
+
+  # copilot-backend: experiments + agent + chat/analyze. Reads events read-only.
+  copilot-backend:
+    build: ./packages/copilot-backend
+    container_name: copilot_api
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ecom-backend:
+        condition: service_started
+    env_file:
+      - ./packages/copilot-backend/.env   # supplies OPENAI_API_KEY (no shell source needed)
+    environment:
+      # Compose-network overrides win over .env for the DB + MCP hosts.
+      DATABASE_URL: postgresql://copilot_role:copilot_pw@postgres:5432/copilot
+      AGENT_DATABASE_URL: postgresql://agent_readonly:agent_pw@postgres:5432/copilot
+      PLAYWRIGHT_MCP_URL: http://playwright-mcp:8931/mcp
+      USE_PLAYWRIGHT: "true"
+      PORT: "3001"
+    ports:
+      - "3001:3001"
+
+  # Playwright MCP server — browser tools the agent calls to inspect variant URLs.
+  # Custom image: @playwright/mcp + its exact matching browser installed at build time.
+  playwright-mcp:
+    build: ./packages/playwright-mcp
+    container_name: copilot_playwright
+    ports:
+      - "8931:8931"
+
+  # Storefront (test subject). Containerized so playwright-mcp can reach it by name.
+  ecom-web:
+    build:
+      context: ./packages/ecom
+      args:
+        VITE_API_BASE: http://localhost:3002
+    container_name: ecom_web
+    ports:
+      - "5173:80"
+
+  # PM dashboard (chat + decision cards).
+  dashboard:
+    build:
+      context: ./packages/dashboard
+      args:
+        VITE_API_BASE: http://localhost:3001
+    container_name: copilot_dashboard
+    ports:
+      - "5174:80"
+
+volumes:
+  copilot_pgdata:
