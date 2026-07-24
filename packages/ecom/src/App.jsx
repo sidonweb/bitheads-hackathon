@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { fetchVariant } from './lib/flag.js';
 import { track } from './lib/track.js';
+import { CATALOG } from './data/catalog.js';
 import Header from './components/Header.jsx';
 import ProductGrid from './components/ProductGrid.jsx';
 import ProductDetail from './components/ProductDetail.jsx';
@@ -25,6 +26,15 @@ export default function App() {
         track('page_view', f.variantId);
       })
       .catch(() => setVariant('A'));
+
+    // Deep-link: ?screen=checkout jumps straight to the checkout page with a
+    // seeded cart, so the A/B difference (the CTA) is directly viewable without
+    // clicking through the funnel. Used by the copilot's page-inspection tool.
+    const screen = new URLSearchParams(window.location.search).get('screen');
+    if (screen === 'checkout') {
+      setCart([CATALOG[0]]);
+      setStage('checkout');
+    }
   }, []);
 
   if (!variant) {

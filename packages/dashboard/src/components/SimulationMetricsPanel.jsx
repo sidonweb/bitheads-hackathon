@@ -5,6 +5,8 @@ export default function SimulationMetricsPanel({
   simMeta,
   onRefresh,
   refreshing,
+  expanded,
+  onToggle,
 }) {
   const matrix = eventMatrix || { eventNames: [], rows: [] };
   const events = matrix.eventNames || [];
@@ -12,15 +14,45 @@ export default function SimulationMetricsPanel({
   const hasData = events.length > 0 && rows.some((r) =>
     Object.values(r.counts || {}).some((n) => n > 0));
 
+  if (!expanded) {
+    return (
+      <aside className="sim-metrics-panel collapsed">
+        <button
+          type="button"
+          className="sim-metrics-expand"
+          onClick={onToggle}
+          aria-expanded={false}
+          aria-label="Show simulation metrics"
+          title="Show simulation metrics"
+        >
+          <span className="sim-metrics-chevron" aria-hidden>›</span>
+          <span className="sim-metrics-collapsed-label">Metrics</span>
+        </button>
+      </aside>
+    );
+  }
+
   return (
-    <section className="sim-metrics-panel">
+    <section className="sim-metrics-panel expanded">
       <div className="sim-metrics-head">
-        <div>
-          <h2>Simulation metrics</h2>
-          <p className="sim-metrics-sub">
-            Dynamic event breakdown per variant
-            {matrix.conversionEvent ? ` · conversion: ${matrix.conversionEvent}` : ''}
-          </p>
+        <div className="sim-metrics-title-row">
+          <button
+            type="button"
+            className="sim-metrics-collapse"
+            onClick={onToggle}
+            aria-expanded
+            aria-label="Hide simulation metrics"
+            title="Hide metrics"
+          >
+            ‹
+          </button>
+          <div>
+            <h2>Simulation metrics</h2>
+            <p className="sim-metrics-sub">
+              Dynamic event breakdown per variant
+              {matrix.conversionEvent ? ` · conversion: ${matrix.conversionEvent}` : ''}
+            </p>
+          </div>
         </div>
         <button
           type="button"

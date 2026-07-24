@@ -17,9 +17,15 @@ function buildSuggestions(experiment) {
   ];
 }
 
-export default function ChatPanel({ experiment, onDecision, decision }) {
+export default function ChatPanel({
+  experiment,
+  onDecision,
+  decision,
+  sessionId,
+  messages,
+  onMessagesChange,
+}) {
   const suggestions = buildSuggestions(experiment);
-  const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
   const endRef = useRef(null);
@@ -31,14 +37,19 @@ export default function ChatPanel({ experiment, onDecision, decision }) {
     const text = (textOverride ?? input).trim();
     if (!text || busy) return;
     setInput('');
-    setMessages((m) => [...m, { role: 'user', text }]);
+    const withUserMessage = [...messages, { role: 'user', text }];
+    onMessagesChange(withUserMessage);
     setBusy(true);
     try {
-      const res = await chat(text);
-      setMessages((m) => [...m, { role: 'assistant', text: res.reply }]);
+      const res = await chat(text, sessionId);
+      onMessagesChange([...withUserMessage, { role: 'assistant', text: res.reply }]);
       if (res.decision) onDecision?.(res.decision);
     } catch (e) {
-      setMessages((m) => [...m, { role: 'assistant', text: `Something went wrong: ${e.message}`, error: true }]);
+      onMessagesChange([...withUserMessage, {
+        role: 'assistant',
+        text: `Something went wrong: ${e.message}`,
+        error: true,
+      }]);
     } finally {
       setBusy(false);
     }

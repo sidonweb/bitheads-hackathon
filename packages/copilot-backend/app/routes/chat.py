@@ -21,7 +21,7 @@ async def chat(experiment_id: str, body: ChatIn):
         raise HTTPException(status_code=404, detail="experiment not found")
 
     try:
-        result = await chat_turn(dict(exp), body.message)
+        result = await chat_turn(dict(exp), body.message, session_id=body.sessionId)
     except Exception as err:  # noqa: BLE001
         raise HTTPException(status_code=500, detail=str(err)) from err
 
