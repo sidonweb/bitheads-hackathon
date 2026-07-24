@@ -10,3 +10,4 @@ langchain-xai>=0.1,<0.3
 langchain-openai>=0.2,<0.4
 langchain-mcp-adapters>=0.1,<0.2
 pydantic>=2.7,<3.0
+httpx>=0.27,<0.29

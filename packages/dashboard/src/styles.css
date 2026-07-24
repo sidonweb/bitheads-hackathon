@@ -1093,3 +1093,124 @@ code {
     flex-direction: column;
   }
 }
+
+/* SDUI chat widgets */
+.sdui-blocks {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 10px;
+}
+
+.sdui-metric-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.sdui-metric {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  text-align: center;
+}
+
+.sdui-metric-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+}
+
+.sdui-metric-value {
+  font-size: 18px;
+  font-weight: 700;
+  margin-top: 4px;
+  color: var(--text);
+}
+
+.sdui-metric.tone-positive .sdui-metric-value { color: #16a34a; }
+.sdui-metric.tone-negative .sdui-metric-value { color: #dc2626; }
+
+.sdui-chart {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+}
+
+.sdui-chart-title {
+  margin: 0 0 8px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.sdui-chart-ylabel {
+  margin: 0 0 10px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.sdui-table-scroll {
+  overflow-x: auto;
+}
+
+.sdui-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.sdui-table th,
+.sdui-table td {
+  border: 1px solid var(--border);
+  padding: 8px 10px;
+  text-align: left;
+}
+
+.sdui-table th {
+  background: var(--bg);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+}
+
+.sdui-decision-card .decision-card {
+  margin-top: 0;
+}
+
+.sdui-alert {
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 14px;
+  border: 1px solid var(--border);
+}
+
+.sdui-alert-warning {
+  background: #fff7ed;
+  border-color: #fdba74;
+  color: #9a3412;
+}
+
+.sdui-alert-error {
+  background: #fef2f2;
+  border-color: #fca5a5;
+  color: #991b1b;
+}
+
+.sdui-alert-info {
+  background: var(--bg);
+  color: var(--text-secondary);
+}
+
+.sdui-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.sdui-unknown {
+  font-size: 13px;
+  color: var(--text-secondary);
+  font-style: italic;
+}

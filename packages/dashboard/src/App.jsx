@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   getExperiment,
   setTrafficSplit,
   newSessionId,
+  analyze,
   EXPERIMENT_ID,
 } from './api.js';
 import CopilotIcon from './components/CopilotIcon.jsx';
@@ -10,11 +11,14 @@ import ChatPanel from './components/ChatPanel.jsx';
 import ExperimentDrawer from './components/ExperimentDrawer.jsx';
 import SimulationMetricsPanel from './components/SimulationMetricsPanel.jsx';
 import SessionSidebar from './components/SessionSidebar.jsx';
+import ApplyConfirmModal from './components/ApplyConfirmModal.jsx';
 import { MoonIcon, SunIcon } from './components/Icons.jsx';
 import { DeleteSessionModal, RenameSessionModal } from './components/SessionModals.jsx';
 import { readTheme, saveTheme, applyTheme } from './lib/theme.js';
+import { readAutoRefresh, saveAutoRefresh } from './lib/metricsPrefs.js';
 
 const SESSIONS_KEY = 'copilot_chat_sessions_v1';
+const METRICS_POLL_INTERVAL_MS = Number(import.meta.env.VITE_METRICS_POLL_MS) || 30_000;
 
 function makeSession(title = 'New test') {
   const now = new Date().toISOString();
@@ -75,31 +79,83 @@ export default function App() {
   const [sessions, setSessions] = useState(initialSessions);
   const [activeSessionId, setActiveSessionId] = useState(initialSessions[0].id);
 
+  const [lastRefreshedAt, setLastRefreshedAt] = useState(null);
+  const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(readAutoRefresh);
+  const [metricsRefreshError, setMetricsRefreshError] = useState('');
+  const [pollStopped, setPollStopped] = useState(false);
+  const [justRefreshed, setJustRefreshed] = useState(false);
+  const [initialLoadDone, setInitialLoadDone] = useState(false);
+
+  const [variantAUrl, setVariantAUrl] = useState('');
+  const [variantBUrl, setVariantBUrl] = useState('');
+  const [urlsInitialized, setUrlsInitialized] = useState(false);
+  const [analyzeBusy, setAnalyzeBusy] = useState(false);
+
+  const [applyModalOpen, setApplyModalOpen] = useState(false);
+  const [applyState, setApplyState] = useState('idle');
+  const [applyError, setApplyError] = useState('');
+  const [toast, setToast] = useState('');
+
+  const prevRefreshing = useRef(false);
+  const pulseTimer = useRef(null);
+
   const orderedSessions = sortSessions(sessions);
   const activeSession = sessions.find((session) => session.id === activeSessionId) || sessions[0];
   const renameSessionTarget = sessions.find((session) => session.id === renameSessionId);
   const deleteSessionTarget = sessions.find((session) => session.id === deleteSessionId);
 
-  const load = useCallback(() => {
+  const load = useCallback((options = {}) => {
+    const { isInitial = false } = options;
     setRefreshing(true);
     return getExperiment()
       .then((d) => {
         setExp(d.experiment);
         setEventMatrix(d.eventMatrix);
         setSplit(d.experiment.traffic_split);
+        setLastRefreshedAt(Date.now());
+        setMetricsRefreshError('');
+        setInitialLoadDone(true);
+
+        if (!urlsInitialized) {
+          if (d.experiment.variant_a_url) setVariantAUrl(d.experiment.variant_a_url);
+          if (d.experiment.variant_b_url) setVariantBUrl(d.experiment.variant_b_url);
+          setUrlsInitialized(true);
+        }
       })
-      .catch((e) => setError(e.message))
+      .catch((e) => {
+        if (isInitial || !initialLoadDone) {
+          setError(e.message);
+        } else {
+          setMetricsRefreshError('Could not refresh metrics. Showing last loaded data.');
+        }
+        if (e.message?.includes('404') || e.message?.includes('not found')) {
+          setPollStopped(true);
+          setError('Experiment not found.');
+        }
+      })
       .finally(() => setRefreshing(false));
-  }, []);
+  }, [initialLoadDone, urlsInitialized]);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    load({ isInitial: true });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    const id = setInterval(() => { load(); }, 30_000);
+    if (pollStopped) return undefined;
+    const id = setInterval(() => {
+      if (autoRefreshEnabled) load();
+    }, METRICS_POLL_INTERVAL_MS);
     return () => clearInterval(id);
-  }, [load]);
+  }, [load, autoRefreshEnabled, pollStopped]);
+
+  useEffect(() => {
+    if (prevRefreshing.current && !refreshing && !metricsRefreshError) {
+      setJustRefreshed(true);
+      if (pulseTimer.current) clearTimeout(pulseTimer.current);
+      pulseTimer.current = setTimeout(() => setJustRefreshed(false), 600);
+    }
+    prevRefreshing.current = refreshing;
+  }, [refreshing, metricsRefreshError]);
 
   useEffect(() => { applyTheme(theme); }, [theme]);
   useEffect(() => { localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions)); }, [sessions]);
@@ -107,6 +163,12 @@ export default function App() {
   useEffect(() => {
     if (!activeSession && sessions.length > 0) setActiveSessionId(sessions[0].id);
   }, [activeSession, sessions]);
+
+  useEffect(() => {
+    if (!toast) return undefined;
+    const id = setTimeout(() => setToast(''), 4000);
+    return () => clearTimeout(id);
+  }, [toast]);
 
   const toggleTheme = () => {
     const next = theme === 'light' ? 'dark' : 'light';
@@ -141,12 +203,16 @@ export default function App() {
   };
 
   const onDecision = (d) => {
+    setApplyState('idle');
+    setApplyError('');
     updateActiveSession((session) => ({ ...session, decision: d }));
     load();
   };
 
   const onDemoReset = () => {
     setSimMeta(null);
+    setApplyState('idle');
+    setApplyError('');
     updateActiveSession((session) => ({
       ...session,
       messages: [],
@@ -159,10 +225,68 @@ export default function App() {
     load();
   };
 
+  const handleAnalyze = async ({ variantAUrl: urlA, variantBUrl: urlB }) => {
+    if (analyzeBusy) return;
+    setAnalyzeBusy(true);
+    setError('');
+    try {
+      const result = await analyze({ variantAUrl: urlA, variantBUrl: urlB });
+      onDecision(result.decision);
+      updateActiveSession((session) => ({
+        ...session,
+        messages: [
+          ...session.messages,
+          {
+            role: 'user',
+            text: `Run full analysis\nA: ${urlA}\nB: ${urlB}`,
+          },
+          {
+            role: 'assistant',
+            text: result.reply || result.decision?.reasoning || 'Analysis complete.',
+            blocks: result.blocks || [],
+          },
+        ],
+      }));
+      setDrawerOpen(false);
+    } finally {
+      setAnalyzeBusy(false);
+    }
+  };
+
+  const handleApplyRequest = () => {
+    setApplyError('');
+    setApplyModalOpen(true);
+  };
+
+  const handleApplyConfirm = async () => {
+    const decision = activeSession?.decision;
+    if (!decision) return;
+    const targetSplit = decision.decision === 'Scale' ? 100 : 0;
+    setApplyState('loading');
+    setApplyError('');
+    try {
+      await setTrafficSplit(EXPERIMENT_ID, targetSplit);
+      setSplit(targetSplit);
+      setApplyState('applied');
+      setApplyModalOpen(false);
+      setToast(
+        decision.decision === 'Scale'
+          ? 'Variant B is now at 100% traffic.'
+          : 'Reverted to 100% Variant A.',
+      );
+      load();
+    } catch (e) {
+      setApplyState('error');
+      setApplyError(e.message || 'Could not update traffic. Try again.');
+    }
+  };
+
   const startNewTest = () => {
     const session = makeSession();
     setSessions((current) => [session, ...current]);
     setActiveSessionId(session.id);
+    setApplyState('idle');
+    setApplyError('');
     setError('');
   };
 
@@ -193,6 +317,11 @@ export default function App() {
     )));
   };
 
+  const handleAutoRefreshChange = (enabled) => {
+    setAutoRefreshEnabled(enabled);
+    saveAutoRefresh(enabled);
+  };
+
   if (!exp) {
     return (
       <div className="copilot-app loading">
@@ -204,6 +333,13 @@ export default function App() {
 
   return (
     <div className="copilot-app">
+      {toast && (
+        <div className="app-toast" role="status">
+          ✓ {toast}
+          <button type="button" className="toast-dismiss" onClick={() => setToast('')} aria-label="Dismiss">✕</button>
+        </div>
+      )}
+
       <SessionSidebar
         sessions={orderedSessions}
         activeSessionId={activeSession?.id}
@@ -240,10 +376,15 @@ export default function App() {
           <SimulationMetricsPanel
             eventMatrix={eventMatrix}
             simMeta={simMeta}
-            onRefresh={load}
+            onRefresh={() => load()}
             refreshing={refreshing}
             expanded={metricsExpanded}
             onToggle={() => setMetricsExpanded((v) => !v)}
+            lastRefreshedAt={lastRefreshedAt}
+            autoRefreshEnabled={autoRefreshEnabled}
+            onAutoRefreshChange={handleAutoRefreshChange}
+            metricsRefreshError={metricsRefreshError}
+            justRefreshed={justRefreshed}
           />
           {activeSession && (
             <ChatPanel
@@ -254,6 +395,11 @@ export default function App() {
               decision={activeSession.decision}
               messages={activeSession.messages}
               onMessagesChange={onMessagesChange}
+              onApplyRequest={handleApplyRequest}
+              applyState={applyState}
+              applyError={applyError}
+              trafficSplit={split}
+              analyzeBusy={analyzeBusy}
             />
           )}
         </div>
@@ -262,14 +408,30 @@ export default function App() {
       <ExperimentDrawer
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
+        experiment={exp}
+        experimentId={EXPERIMENT_ID}
         split={split}
         onSplitChange={setSplit}
         onSplitCommit={onSplitCommit}
         onRefresh={load}
         onDemoReset={onDemoReset}
         onSimulateComplete={onSimulateComplete}
+        onAnalyze={handleAnalyze}
+        analyzeBusy={analyzeBusy}
+        variantAUrl={variantAUrl}
+        variantBUrl={variantBUrl}
+        onVariantAUrlChange={setVariantAUrl}
+        onVariantBUrlChange={setVariantBUrl}
         error={error}
         setError={setError}
+      />
+
+      <ApplyConfirmModal
+        open={applyModalOpen}
+        decision={activeSession?.decision}
+        onConfirm={handleApplyConfirm}
+        onCancel={() => !applyState.startsWith('loading') && setApplyModalOpen(false)}
+        loading={applyState === 'loading'}
       />
 
       <RenameSessionModal

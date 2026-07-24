@@ -34,5 +34,11 @@ PLAYWRIGHT_LOCALHOST_ALIAS = os.getenv("PLAYWRIGHT_LOCALHOST_ALIAS", "host.docke
 # Toggle: if false, the agent skips browser inspection and infers from chat only.
 USE_PLAYWRIGHT = os.getenv("USE_PLAYWRIGHT", "true").lower() == "true"
 
+# Agent guardrails (FR-05).
+AGENT_MAX_TOOL_CALLS = int(os.getenv("AGENT_MAX_TOOL_CALLS", "12"))
+AGENT_RECURSION_LIMIT = int(os.getenv("AGENT_RECURSION_LIMIT", "25"))
+AGENT_LLM_TIMEOUT_SEC = int(os.getenv("AGENT_LLM_TIMEOUT_SEC", "120"))
+DATA_AGENT_MAX_TOOL_CALLS = int(os.getenv("DATA_AGENT_MAX_TOOL_CALLS", "8"))
+
 PORT = int(os.getenv("PORT", "3001"))
 DEMO_MODE = os.getenv("DEMO_MODE", "false").lower() == "true"

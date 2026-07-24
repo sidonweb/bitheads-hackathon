@@ -1,26 +1,69 @@
 from fastapi import APIRouter, HTTPException
 from sqlalchemy import text
-from ..db import engine
+
 from ..agent.graph import analyze_experiment
+from ..agent.guardrails import AgentError, http_status_for
+from ..db import engine
+from ..schemas_agent import AnalyzeIn, ChatMeta
+from ..sdui.pipeline import assemble_analyze_blocks
+from ..sdui.schema import SDUI_VERSION
 
 router = APIRouter()
 
 
-# POST /experiments/:id/analyze — run the agent's full workflow, return the decision.
 @router.post("/experiments/{experiment_id}/analyze")
-async def analyze(experiment_id: str):
+async def analyze(experiment_id: str, body: AnalyzeIn):
     with engine.begin() as conn:
         exp = conn.execute(
             text("SELECT * FROM experiments WHERE id = :id"), {"id": experiment_id}
         ).mappings().first()
     if exp is None:
-        raise HTTPException(status_code=404, detail="experiment not found")
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "error": {
+                    "code": "NOT_FOUND",
+                    "message": "experiment not found",
+                    "retryable": False,
+                }
+            },
+        )
+
+    exp_dict = dict(exp)
 
     try:
-        decision = await analyze_experiment(dict(exp))
-    except Exception as err:  # noqa: BLE001
-        raise HTTPException(status_code=500, detail=str(err))
+        decision = await analyze_experiment(
+            exp_dict,
+            variant_a_url=body.variantAUrl,
+            variant_b_url=body.variantBUrl,
+        )
+    except AgentError as err:
+        raise HTTPException(
+            status_code=http_status_for(err.code),
+            detail={
+                "error": {
+                    "code": err.code,
+                    "message": err.message,
+                    "retryable": err.retryable,
+                    "details": err.details,
+                }
+            },
+        ) from err
 
-    print(f"[analyze] {experiment_id} -> {decision['decision']} "
-          f"(metric: {decision.get('inferred_metric')}, sql: {decision['sql_used']})")
-    return decision
+    print(
+        f"[analyze] {experiment_id} -> {decision['decision']} "
+        f"(metric: {decision.get('inferred_metric')}, sql: {decision['sql_used']})"
+    )
+
+    reply = decision.get("reasoning") or "Analysis complete."
+    with engine.begin() as conn:
+        blocks = await assemble_analyze_blocks(
+            conn, exp_dict, reply=reply, decision=decision
+        )
+
+    return {
+        "decision": decision,
+        "reply": reply,
+        "blocks": blocks,
+        "meta": ChatMeta(sduiVersion=SDUI_VERSION).model_dump(),
+    }

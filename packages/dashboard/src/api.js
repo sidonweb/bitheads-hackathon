@@ -1,11 +1,28 @@
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3001';
 const ECOM_API_BASE = import.meta.env.VITE_ECOM_API_BASE || 'http://localhost:3002';
 export const EXPERIMENT_ID = import.meta.env.VITE_EXPERIMENT_ID || 'exp_1';
+export { API_BASE, ECOM_API_BASE };
 export { DEMO_MODE } from './lib/demoSim.js';
+
+export async function parseApiError(res) {
+  const body = await res.json().catch(() => ({}));
+  if (body?.error?.message) {
+    const err = new Error(body.error.message);
+    err.code = body.error.code;
+    err.retryable = body.error.retryable ?? false;
+    err.details = body.error.details ?? {};
+    return err;
+  }
+  return new Error(body.detail || body.error || `Request failed (${res.status})`);
+}
 
 export async function getExperiment(id = EXPERIMENT_ID) {
   const res = await fetch(`${API_BASE}/experiments/${id}`);
-  if (!res.ok) throw new Error('failed to load experiment');
+  if (!res.ok) {
+    const err = await parseApiError(res);
+    if (res.status === 404) err.message = 'Experiment not found.';
+    throw err;
+  }
   return res.json();
 }
 
@@ -15,7 +32,7 @@ export async function setTrafficSplit(id, trafficSplit) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ trafficSplit }),
   });
-  if (!res.ok) throw new Error('failed to update split');
+  if (!res.ok) throw await parseApiError(res);
   return res.json();
 }
 
@@ -57,12 +74,19 @@ export async function clearChat(id = EXPERIMENT_ID) {
   return res.json();
 }
 
-export async function analyze(id = EXPERIMENT_ID) {
-  const res = await fetch(`${API_BASE}/experiments/${id}/analyze`, { method: 'POST' });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.detail || body.error || 'analysis failed');
+export async function analyze({ variantAUrl, variantBUrl, id = EXPERIMENT_ID } = {}) {
+  if (!variantAUrl?.trim() || !variantBUrl?.trim()) {
+    throw new Error('Both variant URLs are required');
   }
+  const res = await fetch(`${API_BASE}/experiments/${id}/analyze`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      variantAUrl: variantAUrl.trim(),
+      variantBUrl: variantBUrl.trim(),
+    }),
+  });
+  if (!res.ok) throw await parseApiError(res);
   return res.json();
 }
 
@@ -74,11 +98,98 @@ export async function chat(message, sessionId, id = EXPERIMENT_ID) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ message, sessionId }),
   });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.detail || body.error || 'chat failed');
-  }
+  if (!res.ok) throw await parseApiError(res);
   return res.json();
+}
+
+function parseSSEBuffer(buffer) {
+  const events = [];
+  let remainder = buffer.replace(/\r\n/g, '\n');
+
+  while (true) {
+    const idx = remainder.indexOf('\n\n');
+    if (idx === -1) break;
+
+    const block = remainder.slice(0, idx);
+    remainder = remainder.slice(idx + 2);
+
+    let event = 'message';
+    const dataLines = [];
+
+    for (const line of block.split('\n')) {
+      if (line.startsWith('event:')) {
+        event = line.slice(6).trim();
+      } else if (line.startsWith('data:')) {
+        dataLines.push(line.slice(5).trimStart());
+      }
+    }
+
+    if (dataLines.length) {
+      const raw = dataLines.join('\n');
+      try {
+        events.push({ event, data: JSON.parse(raw) });
+      } catch {
+        events.push({ event, data: raw });
+      }
+    }
+  }
+
+  return { events, remainder };
+}
+
+// SSE stream for a chat turn. Calls onEvent({ event, data }) per frame.
+// Throws on HTTP / content-type errors before the stream body is consumed.
+export async function chatStream(message, sessionId, onEvent, signal, id = EXPERIMENT_ID) {
+  const res = await fetch(`${API_BASE}/experiments/${id}/chat/stream`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'text/event-stream',
+    },
+    body: JSON.stringify({ message, sessionId }),
+    signal,
+  });
+
+  if (!res.ok) {
+    throw await parseApiError(res);
+  }
+
+  const contentType = res.headers.get('content-type') || '';
+  if (!contentType.includes('text/event-stream')) {
+    throw new Error('Stream endpoint returned an unexpected response type');
+  }
+
+  if (!res.body) {
+    throw new Error('Stream response has no body');
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const { events, remainder } = parseSSEBuffer(buffer);
+      buffer = remainder;
+
+      for (const frame of events) {
+        onEvent(frame);
+      }
+    }
+
+    if (buffer.trim()) {
+      const { events } = parseSSEBuffer(`${buffer}\n\n`);
+      for (const frame of events) {
+        onEvent(frame);
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
 }
 
 // A fresh, unique session id — used by "New Test" to start a clean conversation.

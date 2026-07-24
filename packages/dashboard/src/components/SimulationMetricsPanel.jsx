@@ -1,3 +1,6 @@
+import { useEffect, useRef, useState } from 'react';
+import { formatRelativeTime } from '../lib/formatRelativeTime.js';
+
 const pct = (rate) => (rate != null && Number.isFinite(rate) ? `${(rate * 100).toFixed(1)}%` : '—');
 
 export default function SimulationMetricsPanel({
@@ -7,12 +10,36 @@ export default function SimulationMetricsPanel({
   refreshing,
   expanded,
   onToggle,
+  lastRefreshedAt,
+  autoRefreshEnabled,
+  onAutoRefreshChange,
+  metricsRefreshError,
+  justRefreshed,
 }) {
+  const [relativeLabel, setRelativeLabel] = useState(null);
+  const prefersReducedMotion = useRef(
+    typeof window !== 'undefined'
+    && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches,
+  );
+
+  useEffect(() => {
+    if (!lastRefreshedAt) {
+      setRelativeLabel(null);
+      return undefined;
+    }
+    const update = () => setRelativeLabel(formatRelativeTime(lastRefreshedAt));
+    update();
+    const id = setInterval(update, 1000);
+    return () => clearInterval(id);
+  }, [lastRefreshedAt]);
+
   const matrix = eventMatrix || { eventNames: [], rows: [] };
   const events = matrix.eventNames || [];
   const rows = matrix.rows || [];
   const hasData = events.length > 0 && rows.some((r) =>
     Object.values(r.counts || {}).some((n) => n > 0));
+
+  const pulseClass = justRefreshed && !prefersReducedMotion.current ? ' sim-metrics-pulse' : '';
 
   if (!expanded) {
     return (
@@ -23,7 +50,7 @@ export default function SimulationMetricsPanel({
           onClick={onToggle}
           aria-expanded={false}
           aria-label="Show simulation metrics"
-          title="Show simulation metrics"
+          title={relativeLabel ? `Metrics · updated ${relativeLabel}` : 'Show simulation metrics'}
         >
           <span className="sim-metrics-chevron" aria-hidden>›</span>
           <span className="sim-metrics-collapsed-label">Metrics</span>
@@ -52,17 +79,46 @@ export default function SimulationMetricsPanel({
               Dynamic event breakdown per variant
               {matrix.conversionEvent ? ` · conversion: ${matrix.conversionEvent}` : ''}
             </p>
+            {relativeLabel && (
+              <p className={`sim-metrics-meta${pulseClass}`}>
+                Last updated {relativeLabel}
+                {!autoRefreshEnabled && ' · auto-refresh paused'}
+              </p>
+            )}
           </div>
         </div>
-        <button
-          type="button"
-          className="btn btn-secondary btn-sm"
-          onClick={onRefresh}
-          disabled={refreshing}
-        >
-          {refreshing ? 'Refreshing…' : '↻ Refresh'}
-        </button>
+        <div className="sim-metrics-actions">
+          <label className="auto-refresh-toggle">
+            <span>Auto-refresh</span>
+            <input
+              type="checkbox"
+              checked={autoRefreshEnabled}
+              onChange={(e) => onAutoRefreshChange?.(e.target.checked)}
+            />
+            <span className="auto-refresh-state">{autoRefreshEnabled ? 'on' : 'off'}</span>
+          </label>
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={onRefresh}
+            disabled={refreshing}
+          >
+            {refreshing ? 'Refreshing…' : '↻ Refresh'}
+          </button>
+        </div>
       </div>
+
+      {!autoRefreshEnabled && (
+        <p className="sim-metrics-paused-hint muted">
+          Auto-refresh paused · manual refresh still available.
+        </p>
+      )}
+
+      {metricsRefreshError && (
+        <div className="metrics-warning-banner" role="status">
+          ⚠ {metricsRefreshError}
+        </div>
+      )}
 
       {simMeta?.usersSimulated && (
         <p className="sim-run-meta">
