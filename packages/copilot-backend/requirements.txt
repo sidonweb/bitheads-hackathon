@@ -1,0 +1,12 @@
+fastapi>=0.115,<0.116
+uvicorn[standard]>=0.30,<0.35
+psycopg[binary,pool]>=3.2,<3.3
+SQLAlchemy>=2.0,<2.1
+python-dotenv>=1.0,<2.0
+langchain>=0.3,<0.4
+langchain-community>=0.3,<0.4
+langgraph>=0.2,<0.4
+langchain-xai>=0.1,<0.3
+langchain-openai>=0.2,<0.4
+langchain-mcp-adapters>=0.1,<0.2
+pydantic>=2.7,<3.0
