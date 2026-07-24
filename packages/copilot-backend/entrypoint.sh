@@ -21,4 +21,8 @@ else:
 PY
 
 echo "Starting copilot-backend on :${PORT:-3001}..."
+if [ "${UVICORN_RELOAD:-false}" = "true" ]; then
+  exec uvicorn app.main:app --host 0.0.0.0 --port "${PORT:-3001}" --reload --reload-dir app
+fi
+
 exec uvicorn app.main:app --host 0.0.0.0 --port "${PORT:-3001}"

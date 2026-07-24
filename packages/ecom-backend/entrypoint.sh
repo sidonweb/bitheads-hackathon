@@ -26,4 +26,8 @@ if [ "${SEED_ON_START:-true}" = "true" ]; then
 fi
 
 echo "Starting ecom-backend on :${PORT:-3002}..."
+if [ "${UVICORN_RELOAD:-false}" = "true" ]; then
+  exec uvicorn app.main:app --host 0.0.0.0 --port "${PORT:-3002}" --reload --reload-dir app
+fi
+
 exec uvicorn app.main:app --host 0.0.0.0 --port "${PORT:-3002}"

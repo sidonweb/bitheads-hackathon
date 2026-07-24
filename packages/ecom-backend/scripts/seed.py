@@ -44,6 +44,7 @@ def build_rows():
 
 def main():
     with psycopg.connect(ADMIN_DATABASE_URL, autocommit=True) as conn:
+        conn.execute("DELETE FROM universal_events WHERE experiment_id = %s", (EXPERIMENT_ID,))
         conn.execute(
             """
             INSERT INTO experiments
