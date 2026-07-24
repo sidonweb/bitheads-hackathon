@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .routes import experiments, analyze, chat
+from .routes import experiments, analyze, chat, demo, discover
 from .agent.graph import _load_playwright_tools
 
 
@@ -37,3 +37,5 @@ def health():
 app.include_router(experiments.router)
 app.include_router(analyze.router)
 app.include_router(chat.router)
+app.include_router(demo.router)
+app.include_router(discover.router)

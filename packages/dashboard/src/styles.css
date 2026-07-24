@@ -100,15 +100,134 @@ body {
   line-height: 1;
 }
 
+/* Main split: metrics panel + chat */
+.main-split {
+  flex: 1;
+  display: grid;
+  grid-template-columns: minmax(320px, 42%) 1fr;
+  min-height: 0;
+  overflow: hidden;
+}
+
+@media (max-width: 960px) {
+  .main-split {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr;
+    overflow-y: auto;
+  }
+}
+
+/* Simulation metrics panel */
+.sim-metrics-panel {
+  border-right: 1px solid var(--border);
+  background: var(--surface);
+  padding: 20px;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.sim-metrics-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.sim-metrics-head h2 {
+  margin: 0 0 4px;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.sim-metrics-sub {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.sim-recipe-badge,
+.sim-run-meta {
+  margin: 0 0 10px;
+  font-size: 12px;
+  color: var(--accent);
+}
+
+.sim-run-meta {
+  color: var(--text-secondary);
+}
+
+.sim-metrics-empty {
+  padding: 24px 12px;
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.sim-metrics-empty .muted {
+  font-size: 13px;
+  margin-top: 8px;
+}
+
+.sim-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md, 8px);
+}
+
+.sim-metrics-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.sim-metrics-table th,
+.sim-metrics-table td {
+  padding: 10px 12px;
+  text-align: right;
+  border-bottom: 1px solid var(--border);
+}
+
+.sim-metrics-table th:first-child,
+.sim-metrics-table td:first-child {
+  text-align: left;
+}
+
+.sim-metrics-table thead th {
+  background: var(--bg);
+  font-weight: 600;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.sim-metrics-table .col-conversion {
+  color: var(--accent);
+}
+
+.btn-sm {
+  padding: 6px 12px;
+  font-size: 13px;
+}
+
+.drawer-hint {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin: 8px 0 0;
+}
+
+.drawer-error {
+  margin-top: 12px;
+}
+
 /* Chat layout */
 .copilot-chat {
   flex: 1;
   display: flex;
   flex-direction: column;
   min-height: 0;
-  max-width: 820px;
   width: 100%;
-  margin: 0 auto;
+  max-width: none;
+  margin: 0;
 }
 
 .chat-scroll {
@@ -428,7 +547,43 @@ body {
   color: var(--text-secondary);
 }
 
+.drawer-input,
+.drawer-select {
+  width: 100%;
+  box-sizing: border-box;
+  margin-bottom: 12px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 14px;
+}
+
+.drawer-field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.drawer-field-row .drawer-input {
+  margin-bottom: 0;
+}
+
+.drawer-action {
+  width: 100%;
+  margin-top: 8px;
+}
+
+.drawer-badge {
+  margin: 0 0 10px;
+  font-size: 12px;
+  color: var(--accent);
+  font-weight: 600;
+}
+
 .field-label {
+  display: block;
   font-size: 12px;
   font-weight: 600;
   color: var(--text-secondary);

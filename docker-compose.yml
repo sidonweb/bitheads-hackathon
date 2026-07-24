@@ -27,10 +27,15 @@ services:
       DATABASE_URL: postgresql://ecom_role:ecom_pw@postgres:5432/copilot
       ADMIN_DATABASE_URL: postgresql://postgres:postgres@postgres:5432/copilot
       ECOM_WEB_URL: http://localhost:5173
+      JOURNEY_RECIPE_DIR: /app/data
       PORT: "3002"
       SEED_ON_START: "true"
       UVICORN_RELOAD: "true"
       WATCHFILES_FORCE_POLLING: "true"
+      SEED_PROFILE: "scale"
+      DEMO_MODE: "true"
+    volumes:
+      - journey_data:/app/data
     ports:
       - "3002:3002"
     volumes:
@@ -59,6 +64,10 @@ services:
       PORT: "3001"
       UVICORN_RELOAD: "true"
       WATCHFILES_FORCE_POLLING: "true"
+      DEMO_MODE: "true"
+      JOURNEY_RECIPE_DIR: /app/data
+    volumes:
+      - journey_data:/app/data
     ports:
       - "3001:3001"
     volumes:
@@ -71,6 +80,12 @@ services:
     container_name: copilot_playwright
     ports:
       - "8931:8931"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    build:
+      context: ./packages/playwright-mcp
+      args:
+        PLAYWRIGHT_LOCALHOST_ALIAS: host.docker.internal
 
   # Storefront (test subject). Containerized so playwright-mcp can reach it by name.
   ecom-web:
@@ -90,6 +105,12 @@ services:
   # PM dashboard (chat + decision cards).
   dashboard:
     image: node:20-alpine
+    build:
+      context: ./packages/dashboard
+      args:
+        VITE_API_BASE: http://localhost:3001
+        VITE_ECOM_API_BASE: http://localhost:3002
+        VITE_DEMO_MODE: "true"
     container_name: copilot_dashboard
     working_dir: /app
     environment:
@@ -106,3 +127,4 @@ volumes:
   copilot_pgdata:
   ecom_node_modules:
   dashboard_node_modules:
+  journey_data:

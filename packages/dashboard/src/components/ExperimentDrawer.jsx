@@ -1,4 +1,12 @@
-import Metrics from './Metrics.jsx';
+import { useState } from 'react';
+import {
+  DEMO_MODE,
+  SCENARIOS,
+  readSimSettings,
+  saveSimSettings,
+  toConvFraction,
+} from '../lib/demoSim.js';
+import { demoReset, demoSimulate, discoverJourney } from '../api.js';
 
 export default function ExperimentDrawer({
   open,
@@ -6,11 +14,106 @@ export default function ExperimentDrawer({
   split,
   onSplitChange,
   onSplitCommit,
-  summary,
-  metric,
   onRefresh,
+  onDemoReset,
+  onSimulateComplete,
+  onDiscoverComplete,
   error,
+  setError,
 }) {
+  const [simUsers, setSimUsers] = useState(() => readSimSettings().users);
+  const [convA, setConvA] = useState(() => readSimSettings().convA);
+  const [convB, setConvB] = useState(() => readSimSettings().convB);
+  const [scenario, setScenario] = useState(() => readSimSettings().scenario);
+  const [scenarioLabel, setScenarioLabel] = useState('');
+  const [simBusy, setSimBusy] = useState(false);
+  const [resetBusy, setResetBusy] = useState(false);
+  const [discoverBusy, setDiscoverBusy] = useState(false);
+
+  const persistSim = (next) => {
+    saveSimSettings({
+      users: next.users ?? simUsers,
+      convA: next.convA ?? convA,
+      convB: next.convB ?? convB,
+      scenario: next.scenario ?? scenario,
+    });
+  };
+
+  const onUsersChange = (v) => {
+    const n = Math.min(10_000, Math.max(1, Number(v) || 1));
+    setSimUsers(n);
+    persistSim({ users: n });
+  };
+
+  const onConvAChange = (v) => {
+    const n = Math.min(100, Math.max(0, Number(v) || 0));
+    setConvA(n);
+    persistSim({ convA: n });
+  };
+
+  const onConvBChange = (v) => {
+    const n = Math.min(100, Math.max(0, Number(v) || 0));
+    setConvB(n);
+    persistSim({ convB: n });
+  };
+
+  const onScenarioChange = (id) => {
+    setScenario(id);
+    persistSim({ scenario: id });
+  };
+
+  const handleSimulate = async () => {
+    setSimBusy(true);
+    setError('');
+    try {
+      const res = await demoSimulate({
+        users: simUsers,
+        convA: toConvFraction(convA),
+        convB: toConvFraction(convB),
+      });
+      onSimulateComplete?.({
+        usersSimulated: res.usersSimulated,
+        eventsInserted: res.eventsInserted,
+      });
+      await onRefresh();
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setSimBusy(false);
+    }
+  };
+
+  const handleDiscover = async () => {
+    setDiscoverBusy(true);
+    setError('');
+    try {
+      const res = await discoverJourney();
+      onDiscoverComplete?.(res.recipe);
+      await onRefresh();
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setDiscoverBusy(false);
+    }
+  };
+
+  const handleReset = async () => {
+    setResetBusy(true);
+    setError('');
+    try {
+      const res = await demoReset(scenario);
+      setScenarioLabel(res.label || '');
+      onDemoReset?.(res);
+      await onRefresh();
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setResetBusy(false);
+    }
+  };
+
+  const busy = simBusy || resetBusy || discoverBusy;
+
   return (
     <>
       <div className={`drawer-backdrop${open ? ' open' : ''}`} onClick={onClose} aria-hidden />
@@ -36,11 +139,108 @@ export default function ExperimentDrawer({
             <div className="split-labels"><span>A: {100 - split}%</span><span>B: {split}%</span></div>
           </section>
 
-          <section className="drawer-section">
-            <Metrics summary={summary} metric={metric || 'conversions'} />
-            <button type="button" className="btn btn-secondary" onClick={onRefresh}>↻ Refresh metrics</button>
-            {error && <p className="error">⚠ {error}</p>}
-          </section>
+          {DEMO_MODE && (
+            <>
+              <section className="drawer-section">
+                <h3>Journey discovery</h3>
+                <p className="drawer-desc">
+                  Playwright walks the storefront once and records which telemetry events fire.
+                </p>
+                <button
+                  type="button"
+                  className="btn btn-secondary drawer-action"
+                  onClick={handleDiscover}
+                  disabled={busy}
+                >
+                  {discoverBusy ? 'Discovering funnel…' : 'Discover journey'}
+                </button>
+              </section>
+
+              <section className="drawer-section">
+                <h3>Traffic simulation</h3>
+                <p className="drawer-desc">
+                  Replays the discovered funnel via flag + events APIs for each synthetic user.
+                </p>
+                <label className="field-label" htmlFor="sim-users">Simulated users</label>
+                <input
+                  id="sim-users"
+                  className="drawer-input"
+                  type="number"
+                  min="1"
+                  max="10000"
+                  value={simUsers}
+                  onChange={(e) => onUsersChange(e.target.value)}
+                  disabled={busy}
+                />
+                <div className="drawer-field-row">
+                  <div>
+                    <label className="field-label" htmlFor="conv-a">Conv. rate A (%)</label>
+                    <input
+                      id="conv-a"
+                      className="drawer-input"
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="0.1"
+                      value={convA}
+                      onChange={(e) => onConvAChange(e.target.value)}
+                      disabled={busy}
+                    />
+                  </div>
+                  <div>
+                    <label className="field-label" htmlFor="conv-b">Conv. rate B (%)</label>
+                    <input
+                      id="conv-b"
+                      className="drawer-input"
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="0.1"
+                      value={convB}
+                      onChange={(e) => onConvBChange(e.target.value)}
+                      disabled={busy}
+                    />
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-secondary drawer-action"
+                  onClick={handleSimulate}
+                  disabled={busy}
+                >
+                  {simBusy ? `Simulating ${simUsers} users…` : 'Simulate traffic'}
+                </button>
+              </section>
+
+              <section className="drawer-section">
+                <h3>Demo reset</h3>
+                <label className="field-label" htmlFor="demo-scenario">Scenario</label>
+                <select
+                  id="demo-scenario"
+                  className="drawer-select"
+                  value={scenario}
+                  onChange={(e) => onScenarioChange(e.target.value)}
+                  disabled={busy}
+                >
+                  {SCENARIOS.map((s) => (
+                    <option key={s.id} value={s.id}>{s.label}</option>
+                  ))}
+                </select>
+                {scenarioLabel && <p className="drawer-badge">{scenarioLabel}</p>}
+                <button
+                  type="button"
+                  className="btn btn-secondary drawer-action"
+                  onClick={handleReset}
+                  disabled={busy}
+                >
+                  {resetBusy ? 'Resetting…' : 'Reset demo'}
+                </button>
+              </section>
+            </>
+          )}
+
+          {error && <p className="error drawer-error">⚠ {error}</p>}
+          <p className="drawer-hint">Metrics table is on the main dashboard panel.</p>
         </div>
       </aside>
     </>
