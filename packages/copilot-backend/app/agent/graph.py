@@ -37,10 +37,6 @@ from ..config import (
     USE_PLAYWRIGHT,
     XAI_API_KEY,
     XAI_MODEL,
-    LANGSMITH_TRACING,
-    LANGSMITH_ENDPOINT,
-    LANGSMITH_API_KEY,
-    LANGSMITH_PROJECT
 )
 from .statistics import run_statistics as _run_stats, decide
 
