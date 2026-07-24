@@ -17,7 +17,7 @@ function buildSuggestions(experiment) {
   ];
 }
 
-export default function ChatPanel({ experiment, onDecision, decision }) {
+export default function ChatPanel({ experiment, onDecision, decision, sessionId }) {
   const suggestions = buildSuggestions(experiment);
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
@@ -34,7 +34,7 @@ export default function ChatPanel({ experiment, onDecision, decision }) {
     setMessages((m) => [...m, { role: 'user', text }]);
     setBusy(true);
     try {
-      const res = await chat(text);
+      const res = await chat(text, sessionId);
       setMessages((m) => [...m, { role: 'assistant', text: res.reply }]);
       if (res.decision) onDecision?.(res.decision);
     } catch (e) {
