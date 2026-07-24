@@ -504,6 +504,12 @@ body {
   padding: 32px 24px 16px;
 }
 
+.chat-inner {
+  max-width: 820px;
+  margin: 0 auto;
+  width: 100%;
+}
+
 /* Welcome screen */
 .welcome {
   text-align: center;
@@ -585,12 +591,14 @@ body {
 .turn-body {
   flex: 1;
   min-width: 0;
-  max-width: 85%;
+  max-width: 100%;
 }
 
 .turn.user .turn-body {
   display: flex;
   justify-content: flex-end;
+  max-width: 85%;
+  margin-left: auto;
 }
 
 .user-bubble {
@@ -607,8 +615,51 @@ body {
   font-size: 15px;
   line-height: 1.6;
   color: var(--text);
-  white-space: pre-wrap;
   padding-top: 4px;
+}
+
+.assistant-text p {
+  margin: 0 0 0.75em;
+}
+
+.assistant-text p:last-child {
+  margin-bottom: 0;
+}
+
+.assistant-text ul,
+.assistant-text ol {
+  margin: 0.5em 0 0.75em;
+  padding-left: 1.25em;
+}
+
+.md-pre {
+  margin: 12px 0;
+  padding: 0;
+  background: transparent;
+  border: none;
+  overflow: visible;
+}
+
+.md-code-block {
+  display: block;
+  background: var(--code-bg);
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  padding: 14px 16px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.55;
+  overflow-x: auto;
+  white-space: pre;
+  color: var(--text);
+}
+
+.md-inline-code {
+  background: var(--code-bg);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.9em;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
 .assistant-text.thinking {
@@ -1136,11 +1187,35 @@ code {
   flex-direction: column;
   gap: 14px;
   margin-top: 10px;
+  max-width: 100%;
 }
 
 .sdui-metric-grid {
   display: grid;
   gap: 10px;
+  max-width: min(100%, 520px);
+}
+
+.sdui-chart {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  max-width: min(100%, 560px);
+}
+
+.sdui-table-wrap {
+  max-width: min(100%, 640px);
+}
+
+.sdui-decision-card,
+.sdui-alert,
+.sdui-actions {
+  max-width: min(100%, 640px);
+}
+
+.sdui-funnel-chart {
+  max-width: min(100%, 480px);
 }
 
 .sdui-metric {
@@ -1167,13 +1242,6 @@ code {
 
 .sdui-metric.tone-positive .sdui-metric-value { color: #16a34a; }
 .sdui-metric.tone-negative .sdui-metric-value { color: #dc2626; }
-
-.sdui-chart {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 14px 16px;
-}
 
 .sdui-chart-title {
   margin: 0 0 8px;

@@ -204,6 +204,9 @@ with no analysis or verdict), reply in 1–2 short sentences — do NOT call ask
 the UI builds charts from the event matrix server-side.
 
 NEVER paste SQL in your reply. All database access goes through ask_data_analyst only.
+Do not write SQL in chat prose — not even when explaining queries. Summarize results in plain English.
+If the PM explicitly asks for the exact query text, say it was run via the data analyst tool
+and offer to describe what was measured instead of pasting SQL.
 
 TOOL ERROR RECOVERY — mandatory self-check loop
 When ANY tool returns an error, failure text, or empty/useless result:
@@ -341,21 +344,86 @@ async def build_agent(exp: dict, budget: ToolCallBudget):
 
 _SKIP_STREAM_TOOLS = frozenset({"", "RunnableSequence", "RunnableLambda"})
 
-_SQL_FRAGMENT = re.compile(
-    r"^\s*(SELECT|FROM|WHERE|GROUP\s+BY|COUNT\s*\(|FILTER\s*\(|;"
-    r"|variant_id|event_name|event_type|universal_events|experiment_id\s*=)",
+# Only top-level analyst tools — not nested browser_* or SQL toolkit internals.
+_STREAM_TOOLS = frozenset({
+    "inspect_variant_pages",
+    "ask_data_analyst",
+    "run_statistics",
+    "submit_decision",
+})
+
+_SQL_BLOCK = re.compile(
+    r"SELECT[\s\S]*?;",
     re.I,
 )
+_SQL_FRAGMENT = re.compile(
+    r"variant_id[\s\S]*?GROUP\s+BY\s+variant_id\s*",
+    re.I,
+)
+_SQL_FRAGMENT_GLUE = re.compile(
+    r"variant_id[\s\S]*?GROUP\s+BY\s+variant_id(?=[A-Z])",
+    re.I,
+)
+_SQL_LINE = re.compile(
+    r"^[ \t]*[^\n]*(?:\bvariant_id\b|\buniversal_events\b|\bexperiment_id\s*=|"
+    r"COUNT\s*\(\s*\)\s*FILTER|GROUP\s+BY)\b[^\n]*\n?",
+    re.I | re.M,
+)
+_SQL_TOKEN = re.compile(
+    r"^\s*(?:SELECT|FROM|WHERE|GROUP|BY|COUNT|FILTER|variant_id|event_name|"
+    r"universal_events|experiment_id|;|\(|\)|,|\*)\s*$",
+    re.I,
+)
+
+
+class AssistantStreamSanitizer:
+    """Strip SQL from streamed assistant tokens before they reach the client."""
+
+    def __init__(self) -> None:
+        self._buffer = ""
+        self._emitted_len = 0
+
+    def feed(self, chunk: str) -> str:
+        if not chunk:
+            return ""
+        self._buffer += chunk
+        safe = sanitize_assistant_stream(self._buffer)
+        delta = safe[self._emitted_len :]
+        self._emitted_len = len(safe)
+        return delta
+
+
+def sanitize_assistant_stream(text: str) -> str:
+    if not text:
+        return text
+    out = _SQL_BLOCK.sub("", text)
+    out = _SQL_FRAGMENT_GLUE.sub("", out)
+    out = _SQL_FRAGMENT.sub("", out)
+    out = _SQL_LINE.sub("", out)
+    out = re.sub(
+        r"(?:^|\s)(?:variant_id|universal_events)[\s\S]*?(?=It |The |There |However|I |We )",
+        " ",
+        out,
+        flags=re.I,
+    )
+    out = re.sub(r"\n{3,}", "\n\n", out)
+    return out
 
 
 def _looks_like_sql_fragment(text: str) -> bool:
     stripped = text.strip()
     if not stripped:
         return False
-    if _SQL_FRAGMENT.search(stripped):
+    if _SQL_TOKEN.match(stripped):
         return True
     upper = stripped.upper()
-    return "FROM UNIVERSAL_EVENTS" in upper or upper.startswith("SELECT ")
+    if upper.startswith("SELECT ") or "FROM UNIVERSAL_EVENTS" in upper:
+        return True
+    if re.search(r"\bvariant_id\b.*\bCOUNT\s*\(", stripped, re.I):
+        return True
+    if re.search(r"\buniversal_events\b", stripped, re.I) and "=" in stripped:
+        return True
+    return False
 
 
 def _chunk_text(content) -> str:
@@ -377,7 +445,7 @@ def _chunk_text(content) -> str:
 
 
 def _should_stream_tool(name: str | None) -> bool:
-    return bool(name) and name not in _SKIP_STREAM_TOOLS
+    return bool(name) and name in _STREAM_TOOLS
 
 
 def _tool_output_ok(output) -> bool:
@@ -410,6 +478,7 @@ async def chat_turn_stream(
         "recursion_limit": AGENT_RECURSION_LIMIT,
     }
     seen_tool_end_runs: set[str] = set()
+    stream_sanitizer = AssistantStreamSanitizer()
 
     try:
         stream = agent.astream_events(
@@ -433,8 +502,11 @@ async def chat_turn_stream(
             if kind == "on_chat_model_stream":
                 chunk = event.get("data", {}).get("chunk")
                 content = _chunk_text(getattr(chunk, "content", None))
-                if content and not _looks_like_sql_fragment(content):
-                    yield {"type": "token", "content": content}
+                if not content or _looks_like_sql_fragment(content):
+                    continue
+                safe = stream_sanitizer.feed(content)
+                if safe:
+                    yield {"type": "token", "content": safe}
             elif kind == "on_tool_start":
                 name = event.get("name") or ""
                 if not _should_stream_tool(name):

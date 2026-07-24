@@ -37,7 +37,7 @@ export default function ChatPanel({
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
   const [warning, setWarning] = useState(null);
-  const [streamSteps, setStreamSteps] = useState([]);
+  const [streamStatus, setStreamStatus] = useState(null);
   const [streamError, setStreamError] = useState(null);
   const [lastSentText, setLastSentText] = useState('');
   const endRef = useRef(null);
@@ -72,7 +72,7 @@ export default function ChatPanel({
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, busy, decision, analyzeBusy, streamSteps]);
+  }, [messages, busy, decision, analyzeBusy, streamStatus]);
 
   const finalizeAssistant = (withUserMessage, text, extras = {}) => {
     onMessagesChange([
@@ -99,7 +99,7 @@ export default function ChatPanel({
     setInput('');
     setLastSentText(text);
     setStreamError(null);
-    setStreamSteps([]);
+    setStreamStatus(null);
 
     const priorMessages = messages.map((m) => (
       m.streaming ? { role: m.role, text: m.text, ...(m.error ? { error: true } : {}) } : m
@@ -116,7 +116,6 @@ export default function ChatPanel({
     let streamingBlocks = [];
     let gotStreamEvent = false;
     let terminal = false;
-    let stepSeq = 0;
 
     const updateAssistant = () => {
       onMessagesChange([
@@ -141,33 +140,11 @@ export default function ChatPanel({
       }
 
       if (event === 'tool_start') {
-        const id = stepSeq++;
-        setStreamSteps((prev) => [
-          ...prev,
-          {
-            id,
-            name: data?.name,
-            label: data?.label || 'Running analysis step',
-            status: 'active',
-          },
-        ]);
+        setStreamStatus(data?.label || 'Running analysis step');
         return;
       }
 
       if (event === 'tool_end') {
-        setStreamSteps((prev) => {
-          const next = [...prev];
-          for (let i = next.length - 1; i >= 0; i -= 1) {
-            if (next[i].name === data?.name && next[i].status === 'active') {
-              next[i] = {
-                ...next[i],
-                status: data?.ok === false ? 'error' : 'done',
-              };
-              break;
-            }
-          }
-          return next;
-        });
         return;
       }
 
@@ -198,7 +175,7 @@ export default function ChatPanel({
           message: data?.message || 'Could not complete streaming analysis.',
           retryable: data?.retryable ?? false,
         });
-        setStreamSteps([]);
+        setStreamStatus(null);
         setBusy(false);
         return;
       }
@@ -206,7 +183,7 @@ export default function ChatPanel({
       if (event === 'done') {
         terminal = true;
         updateAssistant();
-        setStreamSteps([]);
+        setStreamStatus(null);
         setBusy(false);
       }
     };
@@ -225,13 +202,13 @@ export default function ChatPanel({
             retryable: true,
           });
         }
-        setStreamSteps([]);
+        setStreamStatus(null);
         setBusy(false);
       }
     } catch (e) {
       if (e.name === 'AbortError') {
         if (abortRef.current === ac) {
-          setStreamSteps([]);
+          setStreamStatus(null);
           setBusy(false);
         }
         return;
@@ -258,7 +235,7 @@ export default function ChatPanel({
           retryable: true,
         });
       }
-      setStreamSteps([]);
+      setStreamStatus(null);
       setBusy(false);
     }
   };
@@ -272,6 +249,7 @@ export default function ChatPanel({
   return (
     <div className="copilot-chat">
       <div className="chat-scroll">
+        <div className="chat-inner">
         {!hasUserMessages && !decision && (
           <div className="welcome">
             <div className="welcome-icon"><CopilotIcon size={48} /></div>
@@ -314,7 +292,7 @@ export default function ChatPanel({
                   <BlockRenderer blocks={messageBlocks} handlers={sduiHandlers} />
                 )}
                 {m.streaming && i === streamingMessageIndex && (
-                  <StreamStepIndicator steps={streamSteps} />
+                  <StreamStepIndicator label={streamStatus} />
                 )}
               </div>
             </div>
@@ -350,9 +328,11 @@ export default function ChatPanel({
         )}
 
         <div ref={endRef} />
+        </div>
       </div>
 
       <div className="composer-wrap">
+        <div className="chat-inner">
         {streamError && (
           <div className="stream-error-banner" role="alert">
             <span>
@@ -403,6 +383,7 @@ export default function ChatPanel({
           </button>
         </div>
         <p className="composer-note">Copilot can make mistakes. Verify recommendations before shipping.</p>
+        </div>
       </div>
     </div>
   );
