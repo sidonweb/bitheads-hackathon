@@ -21,7 +21,7 @@ echo "Running migrations..."
 python scripts/migrate.py
 
 if [ "${SEED_ON_START:-true}" = "true" ]; then
-  echo "Seeding demo data (idempotent-ish; safe on a fresh volume)..."
+  echo "Seeding demo data (profile=${SEED_PROFILE:-scale})..."
   python scripts/seed.py || echo "seed skipped/failed (continuing)"
 fi
 

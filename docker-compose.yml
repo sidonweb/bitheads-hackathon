@@ -27,8 +27,13 @@ services:
       DATABASE_URL: postgresql://ecom_role:ecom_pw@postgres:5432/copilot
       ADMIN_DATABASE_URL: postgresql://postgres:postgres@postgres:5432/copilot
       ECOM_WEB_URL: http://localhost:5173
+      JOURNEY_RECIPE_DIR: /app/data
       PORT: "3002"
       SEED_ON_START: "true"
+      SEED_PROFILE: "scale"
+      DEMO_MODE: "true"
+    volumes:
+      - journey_data:/app/data
     ports:
       - "3002:3002"
 
@@ -51,6 +56,10 @@ services:
       PLAYWRIGHT_LOCALHOST_ALIAS: host.docker.internal
       USE_PLAYWRIGHT: "true"
       PORT: "3001"
+      DEMO_MODE: "true"
+      JOURNEY_RECIPE_DIR: /app/data
+    volumes:
+      - journey_data:/app/data
     ports:
       - "3001:3001"
 
@@ -67,8 +76,10 @@ services:
     build:
       context: ./packages/ecom
       args:
-        VITE_API_BASE: http://localhost:3002
+        VITE_API_BASE: http://host.docker.internal:3002
     container_name: ecom_web
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "5173:80"
 
@@ -78,9 +89,12 @@ services:
       context: ./packages/dashboard
       args:
         VITE_API_BASE: http://localhost:3001
+        VITE_ECOM_API_BASE: http://localhost:3002
+        VITE_DEMO_MODE: "true"
     container_name: copilot_dashboard
     ports:
       - "5174:80"
 
 volumes:
   copilot_pgdata:
+  journey_data:

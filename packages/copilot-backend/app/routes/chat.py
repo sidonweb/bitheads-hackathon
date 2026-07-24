@@ -3,8 +3,14 @@ from sqlalchemy import text
 from ..db import engine
 from ..schemas import ChatIn
 from ..agent.graph import chat_turn
+from ..journey.discover import discover_journey
 
 router = APIRouter()
+
+
+def _is_discover_request(message: str) -> bool:
+    m = message.lower()
+    return "discover" in m and ("funnel" in m or "journey" in m)
 
 
 # POST /experiments/:id/chat — one conversational turn with the copilot.
@@ -21,11 +27,16 @@ async def chat(experiment_id: str, body: ChatIn):
         raise HTTPException(status_code=404, detail="experiment not found")
 
     try:
-        result = await chat_turn(dict(exp), body.message)
+        if _is_discover_request(body.message):
+            result = await discover_journey(dict(exp))
+        else:
+            result = await chat_turn(dict(exp), body.message)
     except Exception as err:  # noqa: BLE001
-        raise HTTPException(status_code=500, detail=str(err))
+        raise HTTPException(status_code=500, detail=str(err)) from err
 
     if result.get("decision"):
         d = result["decision"]
         print(f"[chat] {experiment_id} -> {d['decision']} (metric: {d.get('inferred_metric')})")
+    if result.get("recipe"):
+        print(f"[chat] {experiment_id} journey discovered: {result['recipe'].get('funnelEvents')}")
     return result

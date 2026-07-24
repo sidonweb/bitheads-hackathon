@@ -271,3 +271,16 @@ async def analyze_experiment(exp: dict) -> dict:
     if capture["decision"] is None:
         raise RuntimeError("agent did not submit a decision")
     return capture["decision"]
+
+
+def clear_chat_threads(experiment_id: str) -> None:
+    """Drop in-memory chat history for an experiment (demo reset)."""
+    for thread_id in (experiment_id, f"{experiment_id}:analyze"):
+        try:
+            _checkpointer.delete_thread(thread_id)
+        except AttributeError:
+            store = getattr(_checkpointer, "storage", None)
+            if isinstance(store, dict):
+                store.pop(thread_id, None)
+        except Exception:  # noqa: BLE001
+            pass

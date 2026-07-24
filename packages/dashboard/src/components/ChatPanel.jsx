@@ -13,11 +13,12 @@ function buildSuggestions(experiment) {
   return [
     `Is ${experiment.variant_b_name} beating ${experiment.variant_a_name}?`,
     'Compare both variants and tell me what changed',
+    'Discover the experiment funnel',
     'Should we roll out variant B to everyone?',
   ];
 }
 
-export default function ChatPanel({ experiment, onDecision, decision }) {
+export default function ChatPanel({ experiment, onDecision, decision, onRecipeDiscovered }) {
   const suggestions = buildSuggestions(experiment);
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
@@ -37,6 +38,7 @@ export default function ChatPanel({ experiment, onDecision, decision }) {
       const res = await chat(text);
       setMessages((m) => [...m, { role: 'assistant', text: res.reply }]);
       if (res.decision) onDecision?.(res.decision);
+      if (res.recipe) onRecipeDiscovered?.(res.recipe);
     } catch (e) {
       setMessages((m) => [...m, { role: 'assistant', text: `Something went wrong: ${e.message}`, error: true }]);
     } finally {

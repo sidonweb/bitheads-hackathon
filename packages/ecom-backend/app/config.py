@@ -14,3 +14,7 @@ ADMIN_DATABASE_URL = os.getenv(
 )
 
 PORT = int(os.getenv("PORT", "3002"))
+DEMO_MODE = os.getenv("DEMO_MODE", "false").lower() == "true"
+EXPERIMENT_ID = os.getenv("EXPERIMENT_ID", "exp_1")
+ECOM_WEB_URL = os.getenv("ECOM_WEB_URL", "http://localhost:5173")
+SEED_PROFILE = os.getenv("SEED_PROFILE", "scale")

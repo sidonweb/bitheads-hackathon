@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException
 from sqlalchemy import text
 from ..db import engine
 from ..schemas import ExperimentIn, ExperimentPatch
+from ..metrics.event_matrix import build_event_matrix
 
 router = APIRouter()
 
@@ -88,7 +89,13 @@ def get_experiment(experiment_id: str):
                 {"id": experiment_id},
             ).mappings().all()
 
-    return {"experiment": dict(exp), "summary": [dict(r) for r in summary]}
+        event_matrix = build_event_matrix(conn, experiment_id, exp["primary_metric"])
+
+    return {
+        "experiment": dict(exp),
+        "summary": [dict(r) for r in summary],
+        "eventMatrix": event_matrix,
+    }
 
 
 # PATCH /experiments/:id — update traffic allocation / status / variant URLs.

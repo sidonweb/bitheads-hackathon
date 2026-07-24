@@ -35,3 +35,4 @@ PLAYWRIGHT_LOCALHOST_ALIAS = os.getenv("PLAYWRIGHT_LOCALHOST_ALIAS", "host.docke
 USE_PLAYWRIGHT = os.getenv("USE_PLAYWRIGHT", "true").lower() == "true"
 
 PORT = int(os.getenv("PORT", "3001"))
+DEMO_MODE = os.getenv("DEMO_MODE", "false").lower() == "true"

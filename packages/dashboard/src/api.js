@@ -1,5 +1,7 @@
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3001';
+const ECOM_API_BASE = import.meta.env.VITE_ECOM_API_BASE || 'http://localhost:3002';
 export const EXPERIMENT_ID = import.meta.env.VITE_EXPERIMENT_ID || 'exp_1';
+export { DEMO_MODE } from './lib/demoSim.js';
 
 export async function getExperiment(id = EXPERIMENT_ID) {
   const res = await fetch(`${API_BASE}/experiments/${id}`);
@@ -14,6 +16,59 @@ export async function setTrafficSplit(id, trafficSplit) {
     body: JSON.stringify({ trafficSplit }),
   });
   if (!res.ok) throw new Error('failed to update split');
+  return res.json();
+}
+
+export async function demoReset(scenario, id = EXPERIMENT_ID) {
+  const params = new URLSearchParams({ scenario });
+  const res = await fetch(`${ECOM_API_BASE}/demo/reset?${params}`, { method: 'POST' });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.detail || 'demo reset failed');
+  }
+  const data = await res.json();
+  await clearChat(id);
+  return data;
+}
+
+export async function demoSimulate({ users, convA, convB, id = EXPERIMENT_ID }) {
+  const params = new URLSearchParams({
+    users: String(users),
+    convA: String(convA),
+    convB: String(convB),
+    experimentId: id,
+  });
+  const res = await fetch(`${ECOM_API_BASE}/demo/simulate?${params}`, { method: 'POST' });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.detail || 'simulate failed');
+  }
+  return res.json();
+}
+
+export async function clearChat(id = EXPERIMENT_ID) {
+  const params = new URLSearchParams({ experimentId: id });
+  const res = await fetch(`${API_BASE}/demo/clear-chat?${params}`, { method: 'POST' });
+  if (res.status === 404) return null;
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.detail || 'clear chat failed');
+  }
+  return res.json();
+}
+
+export async function discoverJourney(id = EXPERIMENT_ID) {
+  const res = await fetch(`${API_BASE}/experiments/${id}/discover-journey`, { method: 'POST' });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.detail || 'journey discovery failed');
+  }
+  return res.json();
+}
+
+export async function getJourneyRecipe(id = EXPERIMENT_ID) {
+  const res = await fetch(`${API_BASE}/experiments/${id}/journey-recipe`);
+  if (!res.ok) throw new Error('failed to load journey recipe');
   return res.json();
 }
 
