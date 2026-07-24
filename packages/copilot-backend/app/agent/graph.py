@@ -18,6 +18,7 @@ the demo still completes.
 """
 
 import json
+from urllib.parse import urlsplit, urlunsplit
 
 from langchain_community.agent_toolkits.sql.toolkit import SQLDatabaseToolkit
 from langchain_community.utilities import SQLDatabase
@@ -32,6 +33,7 @@ from ..config import (
     OPENAI_BASE_URL,
     OPENAI_MODEL,
     PLAYWRIGHT_MCP_URL,
+    PLAYWRIGHT_LOCALHOST_ALIAS,
     USE_PLAYWRIGHT,
     XAI_API_KEY,
     XAI_MODEL,
@@ -60,6 +62,21 @@ def _build_sql_db() -> SQLDatabase:
         include_tables=["universal_events", "experiments"],
         sample_rows_in_table_info=2,
     )
+
+
+def _browser_url(url: str | None) -> str:
+    """Convert host-local URLs into addresses reachable from the MCP container."""
+    if not url or not PLAYWRIGHT_LOCALHOST_ALIAS:
+        return url or ""
+
+    parts = urlsplit(url)
+    if parts.hostname not in {"localhost", "127.0.0.1"}:
+        return url
+
+    netloc = PLAYWRIGHT_LOCALHOST_ALIAS
+    if parts.port:
+        netloc = f"{netloc}:{parts.port}"
+    return urlunsplit((parts.scheme, netloc, parts.path, parts.query, parts.fragment))
 
 
 # Browser tools are loaded ONCE (at startup) and cached. Reconnecting on every
@@ -96,10 +113,15 @@ async def _load_playwright_tools():
 
 
 def _system_prompt(exp: dict, has_browser: bool) -> str:
+    variant_a_url = exp.get("variant_a_url") or ""
+    variant_b_url = exp.get("variant_b_url") or ""
+    browser_variant_a_url = _browser_url(variant_a_url) if has_browser else variant_a_url
+    browser_variant_b_url = _browser_url(variant_b_url) if has_browser else variant_b_url
+
     inspect = (
-        "1. INSPECT: Use the Playwright browser tools to open variant_a_url and "
-        "variant_b_url. Read each page's visible text/DOM and note what actually "
-        "differs between A and B."
+        "1. INSPECT: Use the Playwright browser tools to open browser_variant_a_url "
+        "and browser_variant_b_url. Read each page's visible text/DOM and note what "
+        "actually differs between A and B."
         if has_browser
         else "1. INSPECT: Browser tools are unavailable. Rely on the PM's chat "
         "description of what differs between A and B."
@@ -110,8 +132,10 @@ Experiment:
 - id: {exp['id']}
 - name: {exp['name']}
 - hypothesis: {exp.get('hypothesis') or '(none provided)'}
-- variant A ({exp.get('variant_a_name')}): {exp.get('variant_a_url') or '(no url)'}
-- variant B ({exp.get('variant_b_name')}): {exp.get('variant_b_url') or '(no url)'}
+- variant A ({exp.get('variant_a_name')}): {variant_a_url or '(no url)'}
+- variant B ({exp.get('variant_b_name')}): {variant_b_url or '(no url)'}
+- browser_variant_a_url: {browser_variant_a_url or '(no url)'}
+- browser_variant_b_url: {browser_variant_b_url or '(no url)'}
 
 The success metric is NOT given to you — you must infer it.
 

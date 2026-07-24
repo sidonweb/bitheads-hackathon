@@ -28,6 +28,9 @@ XAI_MODEL = os.getenv("XAI_MODEL", "grok-3-mini")
 
 # Playwright MCP server (browser tools the agent uses to inspect variant URLs).
 PLAYWRIGHT_MCP_URL = os.getenv("PLAYWRIGHT_MCP_URL", "http://localhost:8931/mcp")
+# Hostname the containerized browser should use when an experiment URL points at
+# localhost. Empty string disables rewriting.
+PLAYWRIGHT_LOCALHOST_ALIAS = os.getenv("PLAYWRIGHT_LOCALHOST_ALIAS", "host.docker.internal")
 # Toggle: if false, the agent skips browser inspection and infers from chat only.
 USE_PLAYWRIGHT = os.getenv("USE_PLAYWRIGHT", "true").lower() == "true"
 

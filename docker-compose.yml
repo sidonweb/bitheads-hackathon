@@ -26,7 +26,7 @@ services:
     environment:
       DATABASE_URL: postgresql://ecom_role:ecom_pw@postgres:5432/copilot
       ADMIN_DATABASE_URL: postgresql://postgres:postgres@postgres:5432/copilot
-      ECOM_WEB_URL: http://ecom-web
+      ECOM_WEB_URL: http://localhost:5173
       PORT: "3002"
       SEED_ON_START: "true"
     ports:
@@ -48,6 +48,7 @@ services:
       DATABASE_URL: postgresql://copilot_role:copilot_pw@postgres:5432/copilot
       AGENT_DATABASE_URL: postgresql://agent_readonly:agent_pw@postgres:5432/copilot
       PLAYWRIGHT_MCP_URL: http://playwright-mcp:8931/mcp
+      PLAYWRIGHT_LOCALHOST_ALIAS: host.docker.internal
       USE_PLAYWRIGHT: "true"
       PORT: "3001"
     ports:
