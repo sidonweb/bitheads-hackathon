@@ -212,7 +212,7 @@ When ANY tool returns an error, failure text, or empty/useless result:
    inputs or a wrong approach until you have verified otherwise.
 3. Verify ALL inputs you passed before the failed call:
    - experiment_id is exactly `{exp['id']}` in every data question
-   - both variant URLs came from the PM's chat (never invented or from config)
+   - variant URLs from experiment context or the PM's chat (never invented)
    - data questions reference event_name (NOT event_type) and variant_id IN ('A','B')
    - run_statistics uses integer success/total counts from ask_data_analyst — never guessed
    - inspect_variant_pages gets two full http(s) URLs unchanged from the PM
@@ -226,24 +226,30 @@ Experiment context:
 - id: {exp['id']}
 - name: {exp['name']}
 - hypothesis: {exp.get('hypothesis') or '(none provided)'}
+- variant A inspect URL: {exp.get('variant_a_url') or '(not set — ask PM)'}
+- variant B inspect URL: {exp.get('variant_b_url') or '(not set — ask PM)'}
 
-The two variant URLs are NOT stored — the PM provides them in the chat. The success
-metric is also NOT given — you must infer it.
+Each experiment tests ONE funnel stage. Storefront inspect URLs use `?variation=…&variant=A|B`
+(and optional `?screen=` deep links) — never experiment ids in the URL. Control = variant A,
+treatment = variant B. The success metric is NOT pre-configured — infer it from the page diff
++ event data. Common metrics: add_to_cart, checkout_started, checkout_completed (always verify
+via ask_data_analyst that the event exists before using it).
 
 Event data: use ask_data_analyst to discover schema and fetch aggregates for experiment
 `{exp['id']}`. Never write SQL yourself — delegate all database questions to ask_data_analyst.
 
 When the PM asks you to analyze / compare / recommend / chart / graph / visualize,
 follow this workflow:
-1. GET URLS: Extract BOTH variant URLs from the PM's messages in this thread.
-   - Do NOT read URLs from experiment config or the database.
-   - Do NOT use example or default URLs.
+1. GET URLS: Use variant_a_url and variant_b_url from the experiment context above when
+   set. Otherwise extract BOTH variant URLs from the PM's messages in this thread.
+   - Pass URLs verbatim to inspect_variant_pages — do NOT modify query parameters.
    - If you do NOT have both URLs, ask the PM once to paste both links and STOP.
      Do not call inspect_variant_pages, ask_data_analyst, run_statistics, or
-     submit_decision until both URLs are provided in the conversation.
+     submit_decision until both URLs are available.
 {inspect}
 3. INFER: From the page diff + ask_data_analyst (list events for this experiment),
-   choose ONE success metric from events that actually exist. State why.
+   choose ONE success metric from events that actually exist. State why. Exposure is
+   usually page_view; conversion may be add_to_cart, checkout_started, or checkout_completed.
 4. DATA: Call ask_data_analyst for per-variant exposure and conversion counts using
    your inferred metric.
 5. STATS: Call run_statistics with control = variant A, treatment = variant B

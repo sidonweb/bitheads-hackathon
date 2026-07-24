@@ -2,7 +2,13 @@ import { useState } from 'react';
 import FeatureIcon from './FeatureIcon.jsx';
 import VariantBadge from './VariantBadge.jsx';
 
-export default function ProductDetail({ product, variant, onAddToCart, onBack }) {
+export default function ProductDetail({
+  product,
+  variant,
+  onAddToCart,
+  onBack,
+  stickyCta = false,
+}) {
   const [qty, setQty] = useState(1);
   const [activeImage, setActiveImage] = useState(0);
   const [wishlisted, setWishlisted] = useState(false);
@@ -12,7 +18,7 @@ export default function ProductDetail({ product, variant, onAddToCart, onBack })
   const inc = () => setQty((q) => q + 1);
 
   return (
-    <div className="product-detail-page">
+    <div className={`product-detail-page${stickyCta ? ' has-sticky-cta' : ''}`}>
       <div className="page-top-row">
         <button type="button" className="btn btn-link" onClick={onBack}>
           ← Back to shop
@@ -90,18 +96,20 @@ export default function ProductDetail({ product, variant, onAddToCart, onBack })
             </div>
           </div>
 
-          <button type="button" className="btn btn-add-cart" onClick={() => onAddToCart(qty)}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path
-                d="M6 6h15l-1.5 9h-12L6 6zm0 0L5 3H2"
-                stroke="currentColor"
-                strokeWidth="1.8"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-            Add to Cart
-          </button>
+          {!stickyCta && (
+            <button type="button" className="btn btn-add-cart" onClick={() => onAddToCart(qty)}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path
+                  d="M6 6h15l-1.5 9h-12L6 6zm0 0L5 3H2"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+              Add to Cart
+            </button>
+          )}
 
           <p className="shipping-note">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -113,6 +121,20 @@ export default function ProductDetail({ product, variant, onAddToCart, onBack })
           </p>
         </div>
       </div>
+
+      {stickyCta && (
+        <div className="sticky-cta-bar">
+          <div className="sticky-cta-inner">
+            <div className="sticky-cta-price">
+              <span className="price-current">${price.toFixed(2)}</span>
+              <span className="sticky-cta-qty">Qty {qty}</span>
+            </div>
+            <button type="button" className="btn btn-hero sticky-cta-btn" onClick={() => onAddToCart(qty)}>
+              Add to Cart — Free Returns
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

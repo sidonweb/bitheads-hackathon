@@ -7,6 +7,23 @@ from ..metrics.event_matrix import build_event_matrix
 router = APIRouter()
 
 
+# GET /experiments — list all experiments (id + name for dashboard picker).
+@router.get("/experiments")
+def list_experiments():
+    with engine.begin() as conn:
+        rows = conn.execute(
+            text(
+                """
+                SELECT id, name, hypothesis, variant_a_name, variant_b_name,
+                       variant_a_url, variant_b_url, traffic_split, status
+                  FROM experiments
+                 ORDER BY id
+                """
+            )
+        ).mappings().all()
+    return {"experiments": [dict(r) for r in rows]}
+
+
 # POST /experiments — create (or upsert) an experiment.
 @router.post("/experiments", status_code=201)
 def create_experiment(x: ExperimentIn):
@@ -114,6 +131,21 @@ def patch_experiment(experiment_id: str, patch: ExperimentPatch):
     if patch.variantBUrl is not None:
         sets.append("variant_b_url = :vburl")
         params["vburl"] = patch.variantBUrl
+    if patch.name is not None:
+        sets.append("name = :name")
+        params["name"] = patch.name
+    if patch.hypothesis is not None:
+        sets.append("hypothesis = :hyp")
+        params["hyp"] = patch.hypothesis
+    if patch.variantAName is not None:
+        sets.append("variant_a_name = :van")
+        params["van"] = patch.variantAName
+    if patch.variantBName is not None:
+        sets.append("variant_b_name = :vbn")
+        params["vbn"] = patch.variantBName
+    if patch.primaryMetric is not None:
+        sets.append("primary_metric = :metric")
+        params["metric"] = patch.primaryMetric
     if not sets:
         raise HTTPException(status_code=400, detail="nothing to update")
 

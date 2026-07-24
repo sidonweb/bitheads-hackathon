@@ -2,10 +2,18 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   getExperiment,
   setTrafficSplit,
+  patchExperiment,
   newSessionId,
   analyze,
   EXPERIMENT_ID,
 } from './api.js';
+import {
+  readActiveVariation,
+  saveActiveVariation,
+  VARIATION_CATALOG,
+  buildVariationUrls,
+} from './lib/variationCatalog.js';
+import { saveHypothesis } from './api/lifecycle.js';
 import CopilotIcon from './components/CopilotIcon.jsx';
 import ChatPanel from './components/ChatPanel.jsx';
 import ExperimentDrawer from './components/ExperimentDrawer.jsx';
@@ -65,6 +73,7 @@ function titleFromMessage(message) {
 
 export default function App() {
   const [initialSessions] = useState(readSessions);
+  const [activeVariationId, setActiveVariationId] = useState(readActiveVariation);
   const [exp, setExp] = useState(null);
   const [eventMatrix, setEventMatrix] = useState(null);
   const [simMeta, setSimMeta] = useState(null);
@@ -88,7 +97,6 @@ export default function App() {
 
   const [variantAUrl, setVariantAUrl] = useState('');
   const [variantBUrl, setVariantBUrl] = useState('');
-  const [urlsInitialized, setUrlsInitialized] = useState(false);
   const [analyzeBusy, setAnalyzeBusy] = useState(false);
 
   const [applyModalOpen, setApplyModalOpen] = useState(false);
@@ -116,11 +124,8 @@ export default function App() {
         setMetricsRefreshError('');
         setInitialLoadDone(true);
 
-        if (!urlsInitialized) {
-          if (d.experiment.variant_a_url) setVariantAUrl(d.experiment.variant_a_url);
-          if (d.experiment.variant_b_url) setVariantBUrl(d.experiment.variant_b_url);
-          setUrlsInitialized(true);
-        }
+        if (d.experiment.variant_a_url) setVariantAUrl(d.experiment.variant_a_url);
+        if (d.experiment.variant_b_url) setVariantBUrl(d.experiment.variant_b_url);
       })
       .catch((e) => {
         if (isInitial || !initialLoadDone) {
@@ -134,7 +139,7 @@ export default function App() {
         }
       })
       .finally(() => setRefreshing(false));
-  }, [initialLoadDone, urlsInitialized]);
+  }, [initialLoadDone]);
 
   useEffect(() => {
     load({ isInitial: true });
@@ -322,6 +327,40 @@ export default function App() {
     saveAutoRefresh(enabled);
   };
 
+  const applyVariationPreset = async (nextId) => {
+    const preset = VARIATION_CATALOG[nextId];
+    if (!preset) return;
+    const urls = buildVariationUrls(nextId);
+    setVariantAUrl(urls.variantAUrl);
+    setVariantBUrl(urls.variantBUrl);
+    try {
+      await patchExperiment({
+        variantAUrl: urls.variantAUrl,
+        variantBUrl: urls.variantBUrl,
+      });
+      await saveHypothesis(EXPERIMENT_ID, {
+        name: preset.name,
+        hypothesis: preset.hypothesis,
+        variantAName: preset.variantAName,
+        variantBName: preset.variantBName,
+      });
+      await load();
+    } catch (e) {
+      setError(e.message);
+    }
+  };
+
+  const handleVariationChange = async (nextId) => {
+    if (nextId === activeVariationId) return;
+    saveActiveVariation(nextId);
+    setActiveVariationId(nextId);
+    setSimMeta(null);
+    setError('');
+    await applyVariationPreset(nextId);
+  };
+
+  const activeVariationMeta = VARIATION_CATALOG[activeVariationId];
+
   if (!exp) {
     return (
       <div className="copilot-app loading">
@@ -357,6 +396,21 @@ export default function App() {
             <span className="brand-name">Experiment Copilot</span>
           </div>
           <div className="header-actions">
+            <label className="experiment-picker-wrap">
+              <span className="sr-only">Storefront variation</span>
+              <select
+                className="experiment-picker"
+                value={activeVariationId}
+                onChange={(e) => handleVariationChange(e.target.value)}
+                aria-label="Select storefront variation"
+              >
+                {Object.values(VARIATION_CATALOG).map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.label}
+                  </option>
+                ))}
+              </select>
+            </label>
             <button
               type="button"
               className="icon-btn theme-toggle"
@@ -410,6 +464,8 @@ export default function App() {
         onClose={() => setDrawerOpen(false)}
         experiment={exp}
         experimentId={EXPERIMENT_ID}
+        variationId={activeVariationId}
+        variationMeta={activeVariationMeta}
         split={split}
         onSplitChange={setSplit}
         onSplitCommit={onSplitCommit}

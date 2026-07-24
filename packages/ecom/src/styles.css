@@ -962,3 +962,102 @@ body {
   .product-grid { grid-template-columns: 1fr; }
   .feature-grid { grid-template-columns: 1fr; }
 }
+
+/* ── exp_2: social proof on product cards ── */
+.star-rating {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0 6px;
+  font-size: 13px;
+}
+
+.star-rating .stars {
+  color: #f59e0b;
+  letter-spacing: -1px;
+}
+
+.star-rating .star-empty { color: #d1d5db; }
+.star-rating .review-count { color: var(--muted); font-size: 12px; }
+
+/* ── exp_3: sticky PDP CTA ── */
+.product-detail-page.has-sticky-cta {
+  padding-bottom: 88px;
+}
+
+.sticky-cta-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 50;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  box-shadow: 0 -4px 16px rgba(17, 24, 39, 0.08);
+  padding: 12px 24px;
+}
+
+.sticky-cta-inner {
+  max-width: var(--max-w);
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.sticky-cta-price {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sticky-cta-qty {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.sticky-cta-btn {
+  width: auto;
+  margin-top: 0;
+  white-space: nowrap;
+}
+
+/* ── exp_4: cart shipping nudge ── */
+.shipping-nudge {
+  background: var(--brand-light);
+  border: 1px solid #bfdbfe;
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  margin-bottom: 16px;
+}
+
+.shipping-nudge-text {
+  margin: 0 0 8px;
+  font-size: 14px;
+}
+
+.shipping-progress {
+  height: 8px;
+  background: #dbeafe;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.shipping-progress-fill {
+  height: 100%;
+  background: var(--brand);
+  border-radius: 999px;
+  transition: width 0.3s ease;
+}
+
+.shipping-nudge-unlocked {
+  margin: 0 0 16px;
+  padding: 10px 14px;
+  background: #ecfdf5;
+  border: 1px solid #bbf7d0;
+  border-radius: var(--radius-sm);
+  color: var(--cta-green);
+  font-size: 14px;
+  font-weight: 600;
+}

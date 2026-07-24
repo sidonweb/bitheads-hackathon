@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   DEMO_MODE,
   SCENARIOS,
@@ -17,6 +17,8 @@ export default function ExperimentDrawer({
   onClose,
   experiment,
   experimentId,
+  variationId,
+  variationMeta,
   split,
   onSplitChange,
   onSplitCommit,
@@ -33,8 +35,8 @@ export default function ExperimentDrawer({
   setError,
 }) {
   const [simUsers, setSimUsers] = useState(() => readSimSettings().users);
-  const [convA, setConvA] = useState(() => readSimSettings().convA);
-  const [convB, setConvB] = useState(() => readSimSettings().convB);
+  const [convA, setConvA] = useState(() => variationMeta?.defaultConvA ?? readSimSettings().convA);
+  const [convB, setConvB] = useState(() => variationMeta?.defaultConvB ?? readSimSettings().convB);
   const [scenario, setScenario] = useState(() => readSimSettings().scenario);
   const [scenarioLabel, setScenarioLabel] = useState('');
   const [simBusy, setSimBusy] = useState(false);
@@ -72,6 +74,13 @@ export default function ExperimentDrawer({
     persistSim({ scenario: id });
   };
 
+  useEffect(() => {
+    if (!variationMeta) return;
+    setConvA(variationMeta.defaultConvA);
+    setConvB(variationMeta.defaultConvB);
+    persistSim({ convA: variationMeta.defaultConvA, convB: variationMeta.defaultConvB });
+  }, [variationId]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleSimulate = async () => {
     setSimBusy(true);
     setError('');
@@ -80,6 +89,8 @@ export default function ExperimentDrawer({
         users: simUsers,
         convA: toConvFraction(convA),
         convB: toConvFraction(convB),
+        id: experimentId,
+        variation: variationId,
       });
       onSimulateComplete?.({
         usersSimulated: res.usersSimulated,
@@ -97,7 +108,7 @@ export default function ExperimentDrawer({
     setResetBusy(true);
     setError('');
     try {
-      const res = await demoReset(scenario);
+      const res = await demoReset(scenario, experimentId, variationId);
       setScenarioLabel(res.label || '');
       onDemoReset?.(res);
       await onRefresh();
@@ -159,6 +170,23 @@ export default function ExperimentDrawer({
             analyzeBusy={analyzeBusy}
             disabled={busy}
           />
+
+          {(variantAUrl || variantBUrl) && (
+            <section className="drawer-section inspect-links">
+              <h3>Inspect in browser</h3>
+              <p className="drawer-desc">Open seeded variant URLs to preview the A/B diff.</p>
+              {variantAUrl && (
+                <a className="inspect-link" href={variantAUrl} target="_blank" rel="noreferrer">
+                  Variant A preview
+                </a>
+              )}
+              {variantBUrl && (
+                <a className="inspect-link" href={variantBUrl} target="_blank" rel="noreferrer">
+                  Variant B preview
+                </a>
+              )}
+            </section>
+          )}
 
           {experimentId && (
             <PreflightCard

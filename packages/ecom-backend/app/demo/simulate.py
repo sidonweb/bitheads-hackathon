@@ -4,11 +4,11 @@ import random
 from sqlalchemy import text
 
 from ..flag import assign_variant
-from .scenarios import EXPERIMENT_ID, EXPOSURE, METRIC, FUNNEL_ON_CONVERT
+from .scenarios import EXPERIMENT_ID, EXPOSURE, FULL_FUNNEL, VARIATION_PRESETS, get_variation_preset, DEFAULT_VARIATION
 
 
-def _metric_value(event_name: str, conversion_event: str) -> float:
-    return 1.0 if event_name == conversion_event else 0.0
+def _metric_value(event_name: str, primary_metric: str) -> float:
+    return 1.0 if event_name == primary_metric else 0.0
 
 
 def simulate_traffic(
@@ -18,6 +18,7 @@ def simulate_traffic(
     users: int,
     conv_a: float,
     conv_b: float,
+    variation_id: str | None = None,
     rng_seed: int | None = None,
 ) -> dict:
     if users < 1 or users > 10_000:
@@ -32,8 +33,18 @@ def simulate_traffic(
 
     traffic_split = row["traffic_split"]
     exposure_event = EXPOSURE
-    funnel_on_convert = FUNNEL_ON_CONVERT
-    conversion_event = METRIC
+    funnel_on_convert = FULL_FUNNEL
+
+    # Infer active variation from experiment name when not passed explicitly.
+    if variation_id is None:
+        name_row = conn.execute(
+            text("SELECT name FROM experiments WHERE id = :id"),
+            {"id": experiment_id},
+        ).mappings().first()
+        variation_id = _variation_from_name(name_row["name"] if name_row else "")
+
+    preset = get_variation_preset(variation_id)
+    primary_metric = preset["primary_metric"]
 
     conn.execute(
         text("DELETE FROM universal_events WHERE experiment_id = :id"),
@@ -73,7 +84,7 @@ def simulate_traffic(
                         "uid": user_id,
                         "vid": variant,
                         "ename": event_name,
-                        "mval": _metric_value(event_name, conversion_event),
+                        "mval": _metric_value(event_name, primary_metric),
                     }
                 )
                 events_inserted += 1
@@ -85,12 +96,6 @@ def simulate_traffic(
     if batch:
         _insert_batch(conn, batch)
 
-    recipe = {
-        "exposureEvent": exposure_event,
-        "conversionEvent": conversion_event,
-        "funnelOnConvert": funnel_on_convert,
-    }
-
     return {
         "ok": True,
         "usersSimulated": users,
@@ -100,9 +105,21 @@ def simulate_traffic(
         "convA": conv_a,
         "convB": conv_b,
         "trafficSplit": traffic_split,
-        "recipe": recipe,
-        "summary": simulate_summary(conn, experiment_id),
+        "variation": variation_id,
+        "recipe": {
+            "exposureEvent": exposure_event,
+            "primaryMetric": primary_metric,
+            "funnelOnConvert": funnel_on_convert,
+        },
+        "summary": simulate_summary(conn, experiment_id, primary_metric),
     }
+
+
+def _variation_from_name(name: str) -> str:
+    for vid, preset in VARIATION_PRESETS.items():
+        if preset["name"] == name:
+            return vid
+    return DEFAULT_VARIATION
 
 
 def _insert_batch(conn, batch: list[dict]) -> None:
@@ -119,8 +136,20 @@ def _insert_batch(conn, batch: list[dict]) -> None:
 
 
 def simulate_summary(
-    conn, experiment_id: str = EXPERIMENT_ID
+    conn,
+    experiment_id: str = EXPERIMENT_ID,
+    primary_metric: str | None = None,
 ) -> list[dict]:
+    if primary_metric is None:
+        primary_metric = get_variation_preset(
+            _variation_from_name(
+                conn.execute(
+                    text("SELECT name FROM experiments WHERE id = :id"),
+                    {"id": experiment_id},
+                ).scalar() or ""
+            )
+        )["primary_metric"]
+
     result = conn.execute(
         text(
             """
@@ -133,6 +162,10 @@ def simulate_summary(
              ORDER BY variant_id
             """
         ),
-        {"id": experiment_id, "exposure": EXPOSURE, "conversion": METRIC},
+        {
+            "id": experiment_id,
+            "exposure": EXPOSURE,
+            "conversion": primary_metric,
+        },
     ).mappings().all()
     return [dict(r) for r in result]

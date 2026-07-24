@@ -19,6 +19,11 @@ class ExperimentPatch(BaseModel):
     status: Optional[str] = None
     variantAUrl: Optional[str] = None
     variantBUrl: Optional[str] = None
+    name: Optional[str] = None
+    hypothesis: Optional[str] = None
+    variantAName: Optional[str] = None
+    variantBName: Optional[str] = None
+    primaryMetric: Optional[str] = None
 
 
 class ChatIn(BaseModel):

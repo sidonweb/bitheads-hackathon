@@ -1,6 +1,7 @@
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3001';
 const ECOM_API_BASE = import.meta.env.VITE_ECOM_API_BASE || 'http://localhost:3002';
 export const EXPERIMENT_ID = import.meta.env.VITE_EXPERIMENT_ID || 'exp_1';
+export { VARIATION_IDS, VARIATION_CATALOG, buildVariationUrls } from './lib/variationCatalog.js';
 export { API_BASE, ECOM_API_BASE };
 export { DEMO_MODE } from './lib/demoSim.js';
 
@@ -26,6 +27,12 @@ export async function getExperiment(id = EXPERIMENT_ID) {
   return res.json();
 }
 
+export async function listExperiments() {
+  const res = await fetch(`${API_BASE}/experiments`);
+  if (!res.ok) throw await parseApiError(res);
+  return res.json();
+}
+
 export async function setTrafficSplit(id, trafficSplit) {
   const res = await fetch(`${API_BASE}/experiments/${id}`, {
     method: 'PATCH',
@@ -36,8 +43,29 @@ export async function setTrafficSplit(id, trafficSplit) {
   return res.json();
 }
 
-export async function demoReset(scenario, id = EXPERIMENT_ID) {
+export async function patchExperiment(
+  { variantAUrl, variantBUrl, name, hypothesis, variantAName, variantBName } = {},
+  id = EXPERIMENT_ID,
+) {
+  const body = {};
+  if (variantAUrl != null) body.variantAUrl = variantAUrl;
+  if (variantBUrl != null) body.variantBUrl = variantBUrl;
+  if (name != null) body.name = name;
+  if (hypothesis != null) body.hypothesis = hypothesis;
+  if (variantAName != null) body.variantAName = variantAName;
+  if (variantBName != null) body.variantBName = variantBName;
+  const res = await fetch(`${API_BASE}/experiments/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw await parseApiError(res);
+  return res.json();
+}
+
+export async function demoReset(scenario, id = EXPERIMENT_ID, variation = null) {
   const params = new URLSearchParams({ scenario });
+  if (variation) params.set('variation', variation);
   const res = await fetch(`${ECOM_API_BASE}/demo/reset?${params}`, { method: 'POST' });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
@@ -48,13 +76,14 @@ export async function demoReset(scenario, id = EXPERIMENT_ID) {
   return data;
 }
 
-export async function demoSimulate({ users, convA, convB, id = EXPERIMENT_ID }) {
+export async function demoSimulate({ users, convA, convB, id = EXPERIMENT_ID, variation = null }) {
   const params = new URLSearchParams({
     users: String(users),
     convA: String(convA),
     convB: String(convB),
     experimentId: id,
   });
+  if (variation) params.set('variation', variation);
   const res = await fetch(`${ECOM_API_BASE}/demo/simulate?${params}`, { method: 'POST' });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));

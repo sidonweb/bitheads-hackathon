@@ -1,7 +1,8 @@
 import { formatBadge } from '../lib/catalogHelpers.js';
+import StarRating from './StarRating.jsx';
 
-export default function ProductCard({ product, onSelect }) {
-  const { name, price, compareAtPrice, image, shortDescription, badge } = product;
+export default function ProductCard({ product, onSelect, showSocialProof = false }) {
+  const { name, price, compareAtPrice, image, shortDescription, badge, rating, reviewCount } = product;
   const badgeLabel = formatBadge(badge);
 
   return (
@@ -16,6 +17,9 @@ export default function ProductCard({ product, onSelect }) {
       </div>
       <div className="product-card-body">
         <h3 className="product-card-name">{name}</h3>
+        {showSocialProof && rating != null && (
+          <StarRating rating={rating} reviewCount={reviewCount} />
+        )}
         <p className="product-card-desc">{shortDescription}</p>
         <div className="product-card-footer">
           <div className="product-card-price">

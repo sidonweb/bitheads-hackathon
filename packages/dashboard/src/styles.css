@@ -247,6 +247,42 @@ body {
   gap: 8px;
 }
 
+.experiment-picker-wrap {
+  display: flex;
+  align-items: center;
+}
+
+.experiment-picker {
+  font-size: 13px;
+  font-family: inherit;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  max-width: 240px;
+}
+
+.inspect-links .inspect-link {
+  display: block;
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--brand);
+  word-break: break-all;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .theme-toggle {
   font-size: 18px;
   line-height: 1;

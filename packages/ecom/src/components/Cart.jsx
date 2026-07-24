@@ -2,6 +2,8 @@ import OrderSummary from './OrderSummary.jsx';
 import CheckoutSteps from './CheckoutSteps.jsx';
 import VariantBadge from './VariantBadge.jsx';
 
+const FREE_SHIPPING_THRESHOLD = 50;
+
 export default function Cart({
   cart,
   total,
@@ -9,7 +11,10 @@ export default function Cart({
   onRemoveItem,
   onCheckout,
   onContinueShopping,
+  showShippingNudge = false,
 }) {
+  const remaining = Math.max(0, FREE_SHIPPING_THRESHOLD - total);
+  const progress = Math.min(100, (total / FREE_SHIPPING_THRESHOLD) * 100);
   return (
     <div className="cart-page-wrap">
       <div className="page-top-row">
@@ -25,6 +30,21 @@ export default function Cart({
               Continue shopping
             </button>
           </div>
+
+          {showShippingNudge && cart.length > 0 && remaining > 0 && (
+            <div className="shipping-nudge">
+              <p className="shipping-nudge-text">
+                Add <strong>${remaining.toFixed(2)}</strong> more for free shipping
+              </p>
+              <div className="shipping-progress" aria-hidden="true">
+                <div className="shipping-progress-fill" style={{ width: `${progress}%` }} />
+              </div>
+            </div>
+          )}
+
+          {showShippingNudge && cart.length > 0 && remaining === 0 && (
+            <p className="shipping-nudge-unlocked">You unlocked free shipping!</p>
+          )}
 
           {cart.length === 0 ? (
             <p className="muted empty-cart">Your cart is empty.</p>
@@ -56,6 +76,7 @@ export default function Cart({
           cart={cart}
           total={total}
           actionLabel={cart.length > 0 ? 'Proceed to checkout' : undefined}
+          actionClassName={showShippingNudge && cart.length > 0 ? 'btn-hero' : undefined}
           onAction={cart.length > 0 ? onCheckout : undefined}
         />
       </div>

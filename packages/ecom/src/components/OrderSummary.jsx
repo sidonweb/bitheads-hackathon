@@ -4,6 +4,7 @@ export default function OrderSummary({
   cart,
   total,
   actionLabel,
+  actionClassName,
   onAction,
   children,
 }) {
@@ -33,7 +34,11 @@ export default function OrderSummary({
       </div>
       {children}
       {actionLabel && onAction && (
-        <button type="button" className="btn btn-primary btn-block" onClick={onAction}>
+        <button
+          type="button"
+          className={`btn btn-primary btn-block${actionClassName ? ` ${actionClassName}` : ''}`}
+          onClick={onAction}
+        >
           {actionLabel}
         </button>
       )}

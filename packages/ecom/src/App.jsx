@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { fetchVariant } from './lib/flag.js';
 import { track } from './lib/track.js';
+import { resolveVariation } from './lib/variations.js';
 import { CATALOG } from './data/catalog.js';
 import Header from './components/Header.jsx';
 import ProductGrid from './components/ProductGrid.jsx';
@@ -12,8 +13,29 @@ import CheckoutSteps from './components/CheckoutSteps.jsx';
 import VariantBadge from './components/VariantBadge.jsx';
 import CheckoutA from './variants/CheckoutA.jsx';
 import CheckoutB from './variants/CheckoutB.jsx';
+import ProductGridB from './variants/ProductGridB.jsx';
+import ProductDetailB from './variants/ProductDetailB.jsx';
+import CartB from './variants/CartB.jsx';
+
+function resolveDeepLink(params) {
+  const screen = params.get('screen');
+  const productId = params.get('product') || 'p1';
+  const product = CATALOG.find((p) => p.id === productId) || CATALOG[0];
+
+  if (screen === 'checkout') {
+    return { stage: 'checkout', cart: [CATALOG[0]], selected: null };
+  }
+  if (screen === 'cart') {
+    return { stage: 'cart', cart: [product], selected: null };
+  }
+  if (screen === 'detail') {
+    return { stage: 'detail', cart: [], selected: product };
+  }
+  return null;
+}
 
 export default function App() {
+  const [variation] = useState(() => resolveVariation());
   const [variant, setVariant] = useState(null);
   const [stage, setStage] = useState('listing');
   const [selected, setSelected] = useState(null);
@@ -27,13 +49,11 @@ export default function App() {
       })
       .catch(() => setVariant('A'));
 
-    // Deep-link: ?screen=checkout jumps straight to the checkout page with a
-    // seeded cart, so the A/B difference (the CTA) is directly viewable without
-    // clicking through the funnel. Used by the copilot's page-inspection tool.
-    const screen = new URLSearchParams(window.location.search).get('screen');
-    if (screen === 'checkout') {
-      setCart([CATALOG[0]]);
-      setStage('checkout');
+    const deepLink = resolveDeepLink(new URLSearchParams(window.location.search));
+    if (deepLink) {
+      setStage(deepLink.stage);
+      setCart(deepLink.cart);
+      if (deepLink.selected) setSelected(deepLink.selected);
     }
   }, []);
 
@@ -79,6 +99,14 @@ export default function App() {
     if (cart.length > 0) setStage('cart');
   };
 
+  const ListingView =
+    variation === 'plp-social-proof' && variant === 'B' ? ProductGridB : ProductGrid;
+  const DetailView =
+    variation === 'pdp-sticky-cta' && variant === 'B' ? ProductDetailB : ProductDetail;
+  const CartView = variation === 'cart-shipping-nudge' && variant === 'B' ? CartB : Cart;
+  const CheckoutView =
+    variation === 'checkout-cta' && variant === 'B' ? CheckoutB : CheckoutA;
+
   return (
     <div className="page-shell">
       <div className="page-content">
@@ -90,11 +118,11 @@ export default function App() {
 
         <main className="main-content">
           {stage === 'listing' && (
-            <ProductGrid variant={variant} onSelectProduct={openDetail} />
+            <ListingView variant={variant} onSelectProduct={openDetail} />
           )}
 
           {stage === 'detail' && selected && (
-            <ProductDetail
+            <DetailView
               product={selected}
               variant={variant}
               onAddToCart={addToCart}
@@ -103,7 +131,7 @@ export default function App() {
           )}
 
           {stage === 'cart' && (
-            <Cart
+            <CartView
               cart={cart}
               total={total}
               variant={variant}
@@ -113,22 +141,14 @@ export default function App() {
             />
           )}
 
-          {stage === 'checkout' &&
-            (variant === 'B' ? (
-              <CheckoutB
-                cart={cart}
-                total={total}
-                variant={variant}
-                onComplete={complete}
-              />
-            ) : (
-              <CheckoutA
-                cart={cart}
-                total={total}
-                variant={variant}
-                onComplete={complete}
-              />
-            ))}
+          {stage === 'checkout' && (
+            <CheckoutView
+              cart={cart}
+              total={total}
+              variant={variant}
+              onComplete={complete}
+            />
+          )}
 
           {stage === 'done' && (
             <div className="confirmation-wrap">

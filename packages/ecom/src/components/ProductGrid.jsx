@@ -6,7 +6,7 @@ import VariantBadge from './VariantBadge.jsx';
 
 const PAGE_SIZE = 8;
 
-export default function ProductGrid({ variant, onSelectProduct }) {
+export default function ProductGrid({ variant, onSelectProduct, showSocialProof = false }) {
   const [category, setCategory] = useState('All');
   const [page, setPage] = useState(1);
   const [sortOpen, setSortOpen] = useState(false);
@@ -71,7 +71,12 @@ export default function ProductGrid({ variant, onSelectProduct }) {
 
       <div className="product-grid">
         {pageItems.map((p) => (
-          <ProductCard key={p.id} product={p} onSelect={onSelectProduct} />
+          <ProductCard
+            key={p.id}
+            product={p}
+            onSelect={onSelectProduct}
+            showSocialProof={showSocialProof}
+          />
         ))}
       </div>
 

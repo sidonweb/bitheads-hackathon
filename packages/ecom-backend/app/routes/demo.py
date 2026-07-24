@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, Query
 
 from ..config import DEMO_MODE, ECOM_WEB_URL, EXPERIMENT_ID
 from ..db import admin_engine
-from ..demo.scenarios import SCENARIO_IDS
+from ..demo.scenarios import DEFAULT_VARIATION, SCENARIO_IDS
 from ..demo.seed_lib import reset_and_seed
 from ..demo.simulate import simulate_traffic
 
@@ -15,7 +15,10 @@ def _require_demo_mode():
 
 
 @router.post("/demo/reset")
-def demo_reset(scenario: str = Query("scale")):
+def demo_reset(
+    scenario: str = Query("scale"),
+    variation: str = Query(DEFAULT_VARIATION),
+):
     _require_demo_mode()
     if scenario not in SCENARIO_IDS:
         raise HTTPException(
@@ -24,7 +27,9 @@ def demo_reset(scenario: str = Query("scale")):
         )
     try:
         with admin_engine.begin() as conn:
-            result = reset_and_seed(conn, scenario, ECOM_WEB_URL)
+            result = reset_and_seed(conn, scenario, ECOM_WEB_URL, variation_id=variation)
+    except ValueError as err:
+        raise HTTPException(status_code=400, detail=str(err)) from err
     except Exception as err:  # noqa: BLE001
         raise HTTPException(status_code=500, detail=str(err)) from err
     return result
@@ -36,6 +41,7 @@ def demo_simulate(
     convA: float = Query(0.158, ge=0.0, le=1.0),
     convB: float = Query(0.18, ge=0.0, le=1.0),
     experimentId: str = Query(EXPERIMENT_ID),
+    variation: str = Query(DEFAULT_VARIATION),
 ):
     _require_demo_mode()
     try:
@@ -46,6 +52,7 @@ def demo_simulate(
                 users=users,
                 conv_a=convA,
                 conv_b=convB,
+                variation_id=variation,
             )
     except ValueError as err:
         raise HTTPException(status_code=400, detail=str(err)) from err
