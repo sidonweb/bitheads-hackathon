@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   getExperiment,
-  getJourneyRecipe,
   setTrafficSplit,
   EXPERIMENT_ID,
 } from './api.js';
@@ -14,7 +13,6 @@ import { readTheme, saveTheme, applyTheme } from './lib/theme.js';
 export default function App() {
   const [exp, setExp] = useState(null);
   const [eventMatrix, setEventMatrix] = useState(null);
-  const [journeyRecipe, setJourneyRecipe] = useState(null);
   const [simMeta, setSimMeta] = useState(null);
   const [split, setSplit] = useState(50);
   const [decision, setDecision] = useState(null);
@@ -23,11 +21,6 @@ export default function App() {
   const [theme, setTheme] = useState(readTheme);
   const [chatKey, setChatKey] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
-
-  const loadRecipe = useCallback(() =>
-    getJourneyRecipe()
-      .then((d) => setJourneyRecipe(d.recipe))
-      .catch(() => {}), []);
 
   const load = useCallback(() => {
     setRefreshing(true);
@@ -43,8 +36,7 @@ export default function App() {
 
   useEffect(() => {
     load();
-    loadRecipe();
-  }, [load, loadRecipe]);
+  }, [load]);
 
   useEffect(() => {
     const id = setInterval(() => { load(); }, 30_000);
@@ -67,7 +59,6 @@ export default function App() {
   const onDecision = (d) => {
     setDecision(d);
     load();
-    if (d?.inferred_metric) loadRecipe();
   };
 
   const onDemoReset = () => {
@@ -79,11 +70,6 @@ export default function App() {
   const onSimulateComplete = (meta) => {
     setSimMeta(meta);
     load();
-  };
-
-  const onDiscoverComplete = (recipe) => {
-    if (recipe) setJourneyRecipe(recipe);
-    loadRecipe();
   };
 
   if (!exp) {
@@ -121,7 +107,6 @@ export default function App() {
       <div className="main-split">
         <SimulationMetricsPanel
           eventMatrix={eventMatrix}
-          journeyRecipe={journeyRecipe}
           simMeta={simMeta}
           onRefresh={load}
           refreshing={refreshing}
@@ -131,7 +116,6 @@ export default function App() {
           experiment={exp}
           onDecision={onDecision}
           decision={decision}
-          onRecipeDiscovered={onDiscoverComplete}
         />
       </div>
 
@@ -144,7 +128,6 @@ export default function App() {
         onRefresh={load}
         onDemoReset={onDemoReset}
         onSimulateComplete={onSimulateComplete}
-        onDiscoverComplete={onDiscoverComplete}
         error={error}
         setError={setError}
       />

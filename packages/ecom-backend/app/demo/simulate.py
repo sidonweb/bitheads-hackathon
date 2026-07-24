@@ -4,8 +4,7 @@ import random
 from sqlalchemy import text
 
 from ..flag import assign_variant
-from .recipe_loader import load_recipe
-from .scenarios import EXPERIMENT_ID, EXPOSURE
+from .scenarios import EXPERIMENT_ID, EXPOSURE, METRIC, FUNNEL_ON_CONVERT
 
 
 def _metric_value(event_name: str, conversion_event: str) -> float:
@@ -32,14 +31,14 @@ def simulate_traffic(
         raise ValueError(f"experiment not found: {experiment_id}")
 
     traffic_split = row["traffic_split"]
-    recipe = load_recipe(experiment_id)
-    exposure_event = recipe.get("exposureEvent") or EXPOSURE
-    funnel_on_convert = recipe.get("funnelOnConvert") or [
-        "add_to_cart",
-        "checkout_started",
-        "checkout_completed",
-    ]
-    conversion_event = recipe.get("conversionEvent") or "checkout_completed"
+    exposure_event = EXPOSURE
+    funnel_on_convert = FUNNEL_ON_CONVERT
+    conversion_event = METRIC
+
+    conn.execute(
+        text("DELETE FROM universal_events WHERE experiment_id = :id"),
+        {"id": experiment_id},
+    )
 
     rng = random.Random(rng_seed) if rng_seed is not None else random.Random()
 
@@ -86,6 +85,12 @@ def simulate_traffic(
     if batch:
         _insert_batch(conn, batch)
 
+    recipe = {
+        "exposureEvent": exposure_event,
+        "conversionEvent": conversion_event,
+        "funnelOnConvert": funnel_on_convert,
+    }
+
     return {
         "ok": True,
         "usersSimulated": users,
@@ -94,8 +99,9 @@ def simulate_traffic(
         "conversions": conversions,
         "convA": conv_a,
         "convB": conv_b,
+        "trafficSplit": traffic_split,
         "recipe": recipe,
-        "summary": simulate_summary(conn, experiment_id, recipe),
+        "summary": simulate_summary(conn, experiment_id),
     }
 
 
@@ -113,11 +119,8 @@ def _insert_batch(conn, batch: list[dict]) -> None:
 
 
 def simulate_summary(
-    conn, experiment_id: str = EXPERIMENT_ID, recipe: dict | None = None
+    conn, experiment_id: str = EXPERIMENT_ID
 ) -> list[dict]:
-    recipe = recipe or load_recipe(experiment_id)
-    exposure = recipe.get("exposureEvent") or EXPOSURE
-    conversion = recipe.get("conversionEvent") or "checkout_completed"
     result = conn.execute(
         text(
             """
@@ -130,6 +133,6 @@ def simulate_summary(
              ORDER BY variant_id
             """
         ),
-        {"id": experiment_id, "exposure": exposure, "conversion": conversion},
+        {"id": experiment_id, "exposure": EXPOSURE, "conversion": METRIC},
     ).mappings().all()
     return [dict(r) for r in result]

@@ -3,9 +3,8 @@
 from sqlalchemy import text
 from sqlalchemy.engine import Connection
 
-from ..journey.recipe import get_recipe_or_default
-
-DEFAULT_EXPOSURE = "page_view"
+EXPOSURE_EVENT = "page_view"
+CONVERSION_EVENT = "checkout_completed"
 VARIANTS = ("A", "B")
 
 
@@ -32,9 +31,8 @@ def build_event_matrix(
     experiment_id: str,
     primary_metric: str | None = None,
 ) -> dict:
-    recipe = get_recipe_or_default(experiment_id)
-    exposure_event = recipe.get("exposureEvent") or DEFAULT_EXPOSURE
-    conversion_event = primary_metric or recipe.get("conversionEvent")
+    exposure_event = EXPOSURE_EVENT
+    conversion_event = primary_metric or CONVERSION_EVENT
 
     raw = conn.execute(
         text(

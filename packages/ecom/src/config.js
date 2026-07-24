@@ -1,5 +1,8 @@
-// Points at ecom-backend (owns events + flag).
-export const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3002';
+// Points at ecom-backend (owns events + flag). Empty string = same-origin + Vite proxy (Docker/Playwright).
+export const API_BASE =
+  import.meta.env.VITE_API_BASE !== undefined
+    ? import.meta.env.VITE_API_BASE
+    : 'http://localhost:3002';
 export const EXPERIMENT_ID = import.meta.env.VITE_EXPERIMENT_ID || 'exp_1';
 
 // Optional ?variant=A|B URL override so each variant is directly viewable

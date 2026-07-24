@@ -2,7 +2,6 @@ const pct = (rate) => (rate != null && Number.isFinite(rate) ? `${(rate * 100).t
 
 export default function SimulationMetricsPanel({
   eventMatrix,
-  journeyRecipe,
   simMeta,
   onRefresh,
   refreshing,
@@ -33,13 +32,6 @@ export default function SimulationMetricsPanel({
         </button>
       </div>
 
-      {journeyRecipe && (
-        <p className="sim-recipe-badge">
-          Journey: {journeyRecipe.funnelEvents?.join(' → ') || 'default funnel'}
-          {journeyRecipe.discoveredVia ? ` (${journeyRecipe.discoveredVia})` : ''}
-        </p>
-      )}
-
       {simMeta?.usersSimulated && (
         <p className="sim-run-meta">
           Last simulation: {simMeta.usersSimulated} users · {simMeta.eventsInserted} events inserted
@@ -49,7 +41,7 @@ export default function SimulationMetricsPanel({
       {!hasData ? (
         <div className="sim-metrics-empty">
           <p>No event data yet.</p>
-          <p className="muted">Reset a scenario, simulate traffic, or discover the funnel first.</p>
+          <p className="muted">Reset demo, then simulate traffic to populate metrics.</p>
         </div>
       ) : (
         <div className="sim-table-wrap">

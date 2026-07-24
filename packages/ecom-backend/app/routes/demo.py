@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Query
 
 from ..config import DEMO_MODE, ECOM_WEB_URL, EXPERIMENT_ID
-from ..db import engine, admin_engine
+from ..db import admin_engine
 from ..demo.scenarios import SCENARIO_IDS
 from ..demo.seed_lib import reset_and_seed
 from ..demo.simulate import simulate_traffic
@@ -39,7 +39,7 @@ def demo_simulate(
 ):
     _require_demo_mode()
     try:
-        with engine.begin() as conn:
+        with admin_engine.begin() as conn:
             result = simulate_traffic(
                 conn,
                 experiment_id=experimentId,

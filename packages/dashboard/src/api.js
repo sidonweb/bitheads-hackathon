@@ -57,21 +57,6 @@ export async function clearChat(id = EXPERIMENT_ID) {
   return res.json();
 }
 
-export async function discoverJourney(id = EXPERIMENT_ID) {
-  const res = await fetch(`${API_BASE}/experiments/${id}/discover-journey`, { method: 'POST' });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.detail || 'journey discovery failed');
-  }
-  return res.json();
-}
-
-export async function getJourneyRecipe(id = EXPERIMENT_ID) {
-  const res = await fetch(`${API_BASE}/experiments/${id}/journey-recipe`);
-  if (!res.ok) throw new Error('failed to load journey recipe');
-  return res.json();
-}
-
 export async function analyze(id = EXPERIMENT_ID) {
   const res = await fetch(`${API_BASE}/experiments/${id}/analyze`, { method: 'POST' });
   if (!res.ok) {
