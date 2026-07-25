@@ -1,0 +1,87 @@
+# Production compose — pulls pre-built images from Docker Hub.
+#
+# Before first deploy:
+#   1. Copy .env.deploy.example to .env.deploy and fill in secrets.
+#   2. Set DOCKERHUB_USER in .env.deploy (must match the account images were pushed to).
+#   3. docker compose --env-file .env.deploy -f docker-compose.prod.yml pull
+#   4. docker compose --env-file .env.deploy -f docker-compose.prod.yml up -d
+
+services:
+  postgres:
+    image: postgres:15
+    container_name: copilot_pg
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: copilot
+    volumes:
+      - copilot_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d copilot"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  ecom-backend:
+    image: ${DOCKERHUB_USER}/bitheads-ecom-backend:${IMAGE_TAG:-latest}
+    container_name: ecom_api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://ecom_role:ecom_pw@postgres:5432/copilot
+      ADMIN_DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@postgres:5432/copilot
+      ECOM_WEB_URL: http://ecom-web
+      PORT: "3002"
+      SEED_ON_START: ${SEED_ON_START:-true}
+      SEED_PROFILE: ${SEED_PROFILE:-scale}
+      DEMO_MODE: ${DEMO_MODE:-true}
+    ports:
+      - "${ECOM_API_PORT:-3002}:3002"
+
+  copilot-backend:
+    image: ${DOCKERHUB_USER}/bitheads-copilot-backend:${IMAGE_TAG:-latest}
+    container_name: copilot_api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ecom-backend:
+        condition: service_started
+    env_file:
+      - ./packages/copilot-backend/.env
+    environment:
+      DATABASE_URL: postgresql://copilot_role:copilot_pw@postgres:5432/copilot
+      AGENT_DATABASE_URL: postgresql://agent_readonly:agent_pw@postgres:5432/copilot
+      PLAYWRIGHT_MCP_URL: http://playwright-mcp:8931/mcp
+      USE_PLAYWRIGHT: "true"
+      PORT: "3001"
+      DEMO_MODE: ${DEMO_MODE:-true}
+    ports:
+      - "${COPILOT_API_PORT:-3001}:3001"
+
+  playwright-mcp:
+    image: ${DOCKERHUB_USER}/bitheads-playwright-mcp:${IMAGE_TAG:-latest}
+    container_name: copilot_playwright
+    restart: unless-stopped
+    ports:
+      - "${PLAYWRIGHT_PORT:-8931}:8931"
+
+  ecom-web:
+    image: ${DOCKERHUB_USER}/bitheads-ecom-web:${IMAGE_TAG:-latest}
+    container_name: ecom_web
+    restart: unless-stopped
+    ports:
+      - "${ECOM_WEB_PORT:-5173}:80"
+
+  dashboard:
+    image: ${DOCKERHUB_USER}/bitheads-dashboard:${IMAGE_TAG:-latest}
+    container_name: copilot_dashboard
+    restart: unless-stopped
+    ports:
+      - "${DASHBOARD_PORT:-5174}:80"
+
+volumes:
+  copilot_pgdata:
