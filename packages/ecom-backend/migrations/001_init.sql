@@ -58,8 +58,8 @@ GRANT SELECT ON experiments TO ecom_role;
 
 -- copilot_role: owns experiment CRUD, and reads events to show dashboard metrics
 -- (read-only on events — it never writes telemetry).
-GRANT SELECT, INSERT, UPDATE ON experiments TO copilot_role;
-GRANT SELECT ON universal_events TO copilot_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON experiments TO copilot_role;
+GRANT SELECT, DELETE ON universal_events TO copilot_role;
 
 -- agent_readonly: SELECT only on both tables — the guardrail at the DB layer.
 GRANT SELECT ON universal_events TO agent_readonly;

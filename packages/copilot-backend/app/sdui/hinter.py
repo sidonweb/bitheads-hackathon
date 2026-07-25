@@ -93,6 +93,13 @@ async def hint_widgets(
     tool_calls_used: int = 0,
 ) -> WidgetPlan:
     """Return widget plan for this chat turn. Falls back to heuristic if LLM fails."""
+
+    if not has_decision and not _VIZ_KEYWORDS.search(message):
+        return WidgetPlan(should_render=False, rationale="no decision and no explicit viz request")
+
+    if tool_calls_used == 0 and not has_decision:
+        return _heuristic_plan(message, has_decision=has_decision, has_events=has_events)
+
     user_prompt = (
         f"User message: {message}\n"
         f"has_decision: {has_decision}\n"

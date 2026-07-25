@@ -1,7 +1,7 @@
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3001';
 const ECOM_API_BASE = import.meta.env.VITE_ECOM_API_BASE || 'http://localhost:3002';
-export const EXPERIMENT_ID = import.meta.env.VITE_EXPERIMENT_ID || 'exp_1';
-export { VARIATION_IDS, VARIATION_CATALOG, buildVariationUrls } from './lib/variationCatalog.js';
+export const EXPERIMENT_ID = import.meta.env.VITE_EXPERIMENT_ID || 'exp_checkout_cta';
+export { VARIATION_IDS, VARIATION_CATALOG, buildVariationUrls, experimentIdForVariation } from './lib/variationCatalog.js';
 export { API_BASE, ECOM_API_BASE };
 export { DEMO_MODE } from './lib/demoSim.js';
 
@@ -29,6 +29,32 @@ export async function getExperiment(id = EXPERIMENT_ID) {
 
 export async function listExperiments() {
   const res = await fetch(`${API_BASE}/experiments`);
+  if (!res.ok) throw await parseApiError(res);
+  return res.json();
+}
+
+export async function createExperiment({ id, name, hypothesis, variantAName, variantBName, variantAUrl, variantBUrl }) {
+  const body = {
+    id,
+    name,
+    hypothesis: hypothesis || '',
+    variantAName: variantAName || 'Control',
+    variantBName: variantBName || 'Treatment',
+    trafficSplit: 50,
+  };
+  if (variantAUrl) body.variantAUrl = variantAUrl;
+  if (variantBUrl) body.variantBUrl = variantBUrl;
+  const res = await fetch(`${API_BASE}/experiments`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw await parseApiError(res);
+  return res.json();
+}
+
+export async function deleteExperiment(id) {
+  const res = await fetch(`${API_BASE}/experiments/${id}`, { method: 'DELETE' });
   if (!res.ok) throw await parseApiError(res);
   return res.json();
 }

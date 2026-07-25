@@ -6,7 +6,10 @@ import {
   patchExperiment,
   newSessionId,
   analyze,
-  EXPERIMENT_ID,
+  demoReset,
+  createExperiment,
+  deleteExperiment,
+  experimentIdForVariation,
 } from './api.js';
 import {
   readActiveVariation,
@@ -27,8 +30,12 @@ import { readTheme, saveTheme, applyTheme } from './lib/theme.js';
 import { readAutoRefresh, saveAutoRefresh } from './lib/metricsPrefs.js';
 import { logEvalEvent } from './api/evals.js';
 
-const SESSIONS_KEY = 'copilot_chat_sessions_v1';
+const SESSIONS_KEY_PREFIX = 'copilot_chat_sessions_';
 const METRICS_POLL_INTERVAL_MS = Number(import.meta.env.VITE_METRICS_POLL_MS) || 30_000;
+
+function sessionsKey(experimentId) {
+  return `${SESSIONS_KEY_PREFIX}${experimentId}`;
+}
 
 function makeSession(title = 'New test') {
   const now = new Date().toISOString();
@@ -43,9 +50,9 @@ function makeSession(title = 'New test') {
   };
 }
 
-function readSessions() {
+function readSessions(experimentId) {
   try {
-    const parsed = JSON.parse(localStorage.getItem(SESSIONS_KEY) || '[]');
+    const parsed = JSON.parse(localStorage.getItem(sessionsKey(experimentId)) || '[]');
     if (Array.isArray(parsed) && parsed.length > 0) {
       return parsed.map((session) => ({
         ...makeSession(),
@@ -73,8 +80,19 @@ function titleFromMessage(message) {
   return singleLine.length > 44 ? `${singleLine.slice(0, 41)}...` : singleLine;
 }
 
+function resolveInitialExpId() {
+  const varId = readActiveVariation();
+  if (varId.startsWith('custom-')) {
+    try {
+      const customs = JSON.parse(localStorage.getItem('copilot_custom_experiments') || '[]');
+      const match = customs.find((e) => e.id === varId);
+      if (match) return match.experimentId;
+    } catch { /* fallthrough */ }
+  }
+  return experimentIdForVariation(varId);
+}
+
 export default function App() {
-  const [initialSessions] = useState(readSessions);
   const [activeVariationId, setActiveVariationId] = useState(readActiveVariation);
   const [exp, setExp] = useState(null);
   const [eventMatrix, setEventMatrix] = useState(null);
@@ -87,8 +105,8 @@ export default function App() {
   const [theme, setTheme] = useState(readTheme);
   const [refreshing, setRefreshing] = useState(false);
   const [metricsExpanded, setMetricsExpanded] = useState(false);
-  const [sessions, setSessions] = useState(initialSessions);
-  const [activeSessionId, setActiveSessionId] = useState(initialSessions[0].id);
+  const [sessions, setSessions] = useState(() => { const id = resolveInitialExpId(); return readSessions(id); });
+  const [activeSessionId, setActiveSessionId] = useState(() => { const id = resolveInitialExpId(); return readSessions(id)[0].id; });
 
   const [lastRefreshedAt, setLastRefreshedAt] = useState(null);
   const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(readAutoRefresh);
@@ -105,19 +123,26 @@ export default function App() {
   const [applyState, setApplyState] = useState('idle');
   const [applyError, setApplyError] = useState('');
   const [toast, setToast] = useState('');
+  const [createExpModalOpen, setCreateExpModalOpen] = useState(false);
+  const [customExperiments, setCustomExperiments] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('copilot_custom_experiments') || '[]'); } catch { return []; }
+  });
 
   const prevRefreshing = useRef(false);
   const pulseTimer = useRef(null);
 
+  const customExp = customExperiments.find((e) => e.id === activeVariationId);
+  const activeExperimentId = customExp ? customExp.experimentId : experimentIdForVariation(activeVariationId);
   const orderedSessions = sortSessions(sessions);
   const activeSession = sessions.find((session) => session.id === activeSessionId) || sessions[0];
   const renameSessionTarget = sessions.find((session) => session.id === renameSessionId);
   const deleteSessionTarget = sessions.find((session) => session.id === deleteSessionId);
 
   const load = useCallback((options = {}) => {
-    const { isInitial = false } = options;
+    const { isInitial = false, experimentIdOverride } = options;
+    const expIdToLoad = experimentIdOverride || activeExperimentId;
     setRefreshing(true);
-    return getExperiment()
+    return getExperiment(expIdToLoad)
       .then((d) => {
         setExp(d.experiment);
         setEventMatrix(d.eventMatrix);
@@ -129,19 +154,36 @@ export default function App() {
         if (d.experiment.variant_a_url) setVariantAUrl(d.experiment.variant_a_url);
         if (d.experiment.variant_b_url) setVariantBUrl(d.experiment.variant_b_url);
       })
-      .catch((e) => {
+      .catch(async (e) => {
+        const is404 = e.message?.includes('404') || e.message?.includes('not found');
+        if (is404 && isInitial) {
+          try {
+            await demoReset('scale', expIdToLoad, activeVariationId);
+            const d = await getExperiment(expIdToLoad);
+            setExp(d.experiment);
+            setEventMatrix(d.eventMatrix);
+            setSplit(d.experiment.traffic_split);
+            setInitialLoadDone(true);
+            if (d.experiment.variant_a_url) setVariantAUrl(d.experiment.variant_a_url);
+            if (d.experiment.variant_b_url) setVariantBUrl(d.experiment.variant_b_url);
+          } catch {
+            setError('Experiment not found.');
+            setPollStopped(true);
+          }
+          return;
+        }
         if (isInitial || !initialLoadDone) {
           setError(e.message);
         } else {
           setMetricsRefreshError('Could not refresh metrics. Showing last loaded data.');
         }
-        if (e.message?.includes('404') || e.message?.includes('not found')) {
+        if (is404) {
           setPollStopped(true);
           setError('Experiment not found.');
         }
       })
       .finally(() => setRefreshing(false));
-  }, [initialLoadDone]);
+  }, [initialLoadDone, activeExperimentId]);
 
   useEffect(() => {
     load({ isInitial: true });
@@ -165,7 +207,8 @@ export default function App() {
   }, [refreshing, metricsRefreshError]);
 
   useEffect(() => { applyTheme(theme); }, [theme]);
-  useEffect(() => { localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions)); }, [sessions]);
+  useEffect(() => { localStorage.setItem(sessionsKey(activeExperimentId), JSON.stringify(sessions)); }, [sessions, activeExperimentId]);
+  useEffect(() => { localStorage.setItem('copilot_custom_experiments', JSON.stringify(customExperiments)); }, [customExperiments]);
 
   useEffect(() => {
     if (!activeSession && sessions.length > 0) setActiveSessionId(sessions[0].id);
@@ -185,7 +228,7 @@ export default function App() {
 
   const onSplitCommit = async (value) => {
     setSplit(value);
-    try { await setTrafficSplit(EXPERIMENT_ID, value); } catch (e) { setError(e.message); }
+    try { await setTrafficSplit(activeExperimentId, value); } catch (e) { setError(e.message); }
   };
 
   const updateActiveSession = (updater) => {
@@ -237,7 +280,7 @@ export default function App() {
     setAnalyzeBusy(true);
     setError('');
     try {
-      const result = await analyze({ variantAUrl: urlA, variantBUrl: urlB });
+      const result = await analyze({ variantAUrl: urlA, variantBUrl: urlB, id: activeExperimentId });
       onDecision(result.decision);
       updateActiveSession((session) => ({
         ...session,
@@ -272,7 +315,7 @@ export default function App() {
     setApplyState('loading');
     setApplyError('');
     try {
-      await setTrafficSplit(EXPERIMENT_ID, targetSplit);
+      await setTrafficSplit(activeExperimentId, targetSplit);
       setSplit(targetSplit);
       setApplyState('applied');
       setApplyModalOpen(false);
@@ -339,6 +382,7 @@ export default function App() {
   const applyVariationPreset = async (nextId) => {
     const preset = VARIATION_CATALOG[nextId];
     if (!preset) return;
+    const nextExpId = experimentIdForVariation(nextId);
     const urls = buildVariationUrls(nextId);
     setVariantAUrl(urls.variantAUrl);
     setVariantBUrl(urls.variantBUrl);
@@ -346,26 +390,94 @@ export default function App() {
       await patchExperiment({
         variantAUrl: urls.variantAUrl,
         variantBUrl: urls.variantBUrl,
-      });
-      await saveHypothesis(EXPERIMENT_ID, {
+      }, nextExpId);
+      await saveHypothesis(nextExpId, {
         name: preset.name,
         hypothesis: preset.hypothesis,
         variantAName: preset.variantAName,
         variantBName: preset.variantBName,
       });
-      await load();
+      await load({ experimentIdOverride: nextExpId });
     } catch (e) {
-      setError(e.message);
+      if (e.message?.includes('not found') || e.code === 'NOT_FOUND') {
+        await demoReset('scale', nextExpId, nextId);
+        await load({ experimentIdOverride: nextExpId });
+      } else {
+        setError(e.message);
+      }
     }
   };
 
   const handleVariationChange = async (nextId) => {
+    if (nextId === '__create_new__') {
+      setCreateExpModalOpen(true);
+      return;
+    }
     if (nextId === activeVariationId) return;
     saveActiveVariation(nextId);
     setActiveVariationId(nextId);
     setSimMeta(null);
     setError('');
-    await applyVariationPreset(nextId);
+
+    const isCustom = customExperiments.some((e) => e.id === nextId);
+    const nextExpId = isCustom
+      ? customExperiments.find((e) => e.id === nextId).experimentId
+      : experimentIdForVariation(nextId);
+    const nextSessions = readSessions(nextExpId);
+    setSessions(nextSessions);
+    setActiveSessionId(nextSessions[0].id);
+
+    if (!isCustom) {
+      await applyVariationPreset(nextId);
+    } else {
+      await load({ experimentIdOverride: nextExpId });
+    }
+  };
+
+  const handleCreateCustomExperiment = async ({ name, hypothesis, variantAName, variantBName, variantAUrl: aUrl, variantBUrl: bUrl }) => {
+    const nextNum = customExperiments.length + Object.keys(VARIATION_CATALOG).length + 1;
+    const expId = `exp_${nextNum}`;
+    const customId = `custom-${expId}`;
+    try {
+      await createExperiment({ id: expId, name, hypothesis, variantAName, variantBName, variantAUrl: aUrl || null, variantBUrl: bUrl || null });
+      const newEntry = { id: customId, experimentId: expId, label: name, name, hypothesis, variantAName, variantBName, variantAUrl: aUrl, variantBUrl: bUrl };
+      setCustomExperiments((prev) => [...prev, newEntry]);
+      setCreateExpModalOpen(false);
+      saveActiveVariation(customId);
+      setActiveVariationId(customId);
+      setSimMeta(null);
+      setError('');
+      if (aUrl) setVariantAUrl(aUrl);
+      if (bUrl) setVariantBUrl(bUrl);
+      const freshSessions = [makeSession()];
+      setSessions(freshSessions);
+      setActiveSessionId(freshSessions[0].id);
+      await load({ experimentIdOverride: expId });
+      setToast(`Experiment "${name}" created.`);
+    } catch (e) {
+      setError(e.message);
+    }
+  };
+
+  const handleDeleteExperiment = async () => {
+    if (!customExp) return;
+    if (!window.confirm(`Delete experiment "${customExp.label}"? This removes all data.`)) return;
+    try {
+      await deleteExperiment(customExp.experimentId);
+      setCustomExperiments((prev) => prev.filter((e) => e.id !== customExp.id));
+      const fallback = 'checkout-cta';
+      saveActiveVariation(fallback);
+      setActiveVariationId(fallback);
+      const fallbackSessions = readSessions(experimentIdForVariation(fallback));
+      setSessions(fallbackSessions);
+      setActiveSessionId(fallbackSessions[0].id);
+      setSimMeta(null);
+      setError('');
+      await load({ experimentIdOverride: experimentIdForVariation(fallback) });
+      setToast('Experiment deleted.');
+    } catch (e) {
+      setError(e.message);
+    }
   };
 
   const activeVariationMeta = VARIATION_CATALOG[activeVariationId];
@@ -418,8 +530,24 @@ export default function App() {
                     {item.label}
                   </option>
                 ))}
+                {customExperiments.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.label}
+                  </option>
+                ))}
+                <option value="__create_new__">+ New Experiment</option>
               </select>
             </label>
+            {customExp && (
+              <button
+                type="button"
+                className="btn btn-danger-ghost"
+                onClick={handleDeleteExperiment}
+                title="Delete this experiment"
+              >
+                Delete
+              </button>
+            )}
             <button
               type="button"
               className="icon-btn theme-toggle"
@@ -455,6 +583,7 @@ export default function App() {
               key={activeSession.id}
               sessionId={activeSession.id}
               experiment={exp}
+              experimentId={activeExperimentId}
               onDecision={onDecision}
               decision={activeSession.decision}
               messages={activeSession.messages}
@@ -473,7 +602,7 @@ export default function App() {
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
         experiment={exp}
-        experimentId={EXPERIMENT_ID}
+        experimentId={activeExperimentId}
         variationId={activeVariationId}
         variationMeta={activeVariationMeta}
         split={split}
@@ -510,6 +639,82 @@ export default function App() {
         onCancel={() => setDeleteSessionId(null)}
         onConfirm={() => deleteSession(deleteSessionTarget.id)}
       />
+
+      {createExpModalOpen && (
+        <CreateExperimentModal
+          onCancel={() => setCreateExpModalOpen(false)}
+          onConfirm={handleCreateCustomExperiment}
+        />
+      )}
+    </div>
+  );
+}
+
+function CreateExperimentModal({ onCancel, onConfirm }) {
+  const [name, setName] = useState('');
+  const [hypothesis, setHypothesis] = useState('');
+  const [variantAName, setVariantAName] = useState('');
+  const [variantBName, setVariantBName] = useState('');
+  const [variantAUrl, setVAUrl] = useState('');
+  const [variantBUrl, setVBUrl] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!name.trim()) return;
+    setBusy(true);
+    await onConfirm({
+      name: name.trim(),
+      hypothesis: hypothesis.trim(),
+      variantAName: variantAName.trim() || 'Control',
+      variantBName: variantBName.trim() || 'Treatment',
+      variantAUrl: variantAUrl.trim(),
+      variantBUrl: variantBUrl.trim(),
+    });
+    setBusy(false);
+  };
+
+  return (
+    <div className="modal-backdrop" onClick={onCancel}>
+      <div className="modal-panel create-exp-modal" onClick={(e) => e.stopPropagation()}>
+        <h2>Create New Experiment</h2>
+        <form onSubmit={handleSubmit}>
+          <label className="form-field">
+            <span>Experiment Name *</span>
+            <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Homepage Banner Test" autoFocus required />
+          </label>
+          <label className="form-field">
+            <span>Hypothesis</span>
+            <textarea value={hypothesis} onChange={(e) => setHypothesis(e.target.value)} placeholder="What do you expect to happen?" rows={2} />
+          </label>
+          <div className="form-row">
+            <label className="form-field">
+              <span>Variant A (Control)</span>
+              <input type="text" value={variantAName} onChange={(e) => setVariantAName(e.target.value)} placeholder="Control" />
+            </label>
+            <label className="form-field">
+              <span>Variant B (Treatment)</span>
+              <input type="text" value={variantBName} onChange={(e) => setVariantBName(e.target.value)} placeholder="Treatment" />
+            </label>
+          </div>
+          <div className="form-row">
+            <label className="form-field">
+              <span>Variant A URL</span>
+              <input type="url" value={variantAUrl} onChange={(e) => setVAUrl(e.target.value)} placeholder="http://..." />
+            </label>
+            <label className="form-field">
+              <span>Variant B URL</span>
+              <input type="url" value={variantBUrl} onChange={(e) => setVBUrl(e.target.value)} placeholder="http://..." />
+            </label>
+          </div>
+          <div className="modal-actions">
+            <button type="button" className="btn btn-ghost" onClick={onCancel} disabled={busy}>Cancel</button>
+            <button type="submit" className="btn btn-primary" disabled={busy || !name.trim()}>
+              {busy ? 'Creating...' : 'Create Experiment'}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }

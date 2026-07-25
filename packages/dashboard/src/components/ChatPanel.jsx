@@ -22,6 +22,7 @@ function buildSuggestions(experiment) {
 
 export default function ChatPanel({
   experiment,
+  experimentId,
   onDecision,
   decision,
   sessionId,
@@ -68,6 +69,11 @@ export default function ChatPanel({
     return message.blocks;
   };
 
+  const shouldShowText = (message) => {
+    if (!message.text?.trim()) return false;
+    return true;
+  };
+
   useEffect(() => () => abortRef.current?.abort(), []);
 
   useEffect(() => {
@@ -82,7 +88,7 @@ export default function ChatPanel({
   };
 
   const sendWithFallback = async (text, withUserMessage) => {
-    const res = await chat(text, sessionId);
+    const res = await chat(text, sessionId, experimentId);
     finalizeAssistant(withUserMessage, res.reply, { blocks: res.blocks || [] });
     if (res.warning) setWarning(res.warning);
     if (res.decision) onDecision?.(res.decision);
@@ -189,7 +195,7 @@ export default function ChatPanel({
     };
 
     try {
-      await chatStream(text, sessionId, handleEvent, ac.signal);
+      await chatStream(text, sessionId, handleEvent, ac.signal, experimentId);
 
       if (ac.signal.aborted || abortRef.current !== ac) return;
 
@@ -269,7 +275,7 @@ export default function ChatPanel({
 
         {messages.map((m, i) => {
           const messageBlocks = blocksForMessage(m);
-          const showText = Boolean(m.text?.trim()) && !m.blocks?.some((b) => b.type === 'markdown');
+          const showText = shouldShowText(m);
 
           return (
             <div key={i} className={`turn ${m.role}${m.error ? ' error' : ''}`}>

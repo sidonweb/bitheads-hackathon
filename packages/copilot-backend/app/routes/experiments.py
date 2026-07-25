@@ -116,6 +116,23 @@ def get_experiment(experiment_id: str):
     }
 
 
+# DELETE /experiments/:id — remove experiment and its events.
+@router.delete("/experiments/{experiment_id}")
+def delete_experiment(experiment_id: str):
+    with engine.begin() as conn:
+        conn.execute(
+            text("DELETE FROM universal_events WHERE experiment_id = :id"),
+            {"id": experiment_id},
+        )
+        result = conn.execute(
+            text("DELETE FROM experiments WHERE id = :id RETURNING id"),
+            {"id": experiment_id},
+        ).first()
+    if result is None:
+        raise HTTPException(status_code=404, detail="not found")
+    return {"ok": True, "id": experiment_id}
+
+
 # PATCH /experiments/:id — update traffic allocation / status / variant URLs.
 @router.patch("/experiments/{experiment_id}")
 def patch_experiment(experiment_id: str, patch: ExperimentPatch):

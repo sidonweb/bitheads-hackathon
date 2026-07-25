@@ -155,8 +155,7 @@ def make_inspect_tool():
     async def inspect_variant_pages(variant_a_url: str, variant_b_url: str) -> str:
         """Open BOTH variant URLs in a real browser and return their rendered
         content so you can see exactly what differs between them (the UI change).
-        You MUST pass both URLs — get them from the PM in the chat. If you do not
-        have both, ask the PM for them instead of calling this tool."""
+        You MUST pass both URLs from the experiment context."""
         if not variant_a_url or not variant_b_url:
             return (
                 "Missing a URL. Ask the PM to provide BOTH the variant A and "
@@ -174,10 +173,10 @@ def make_inspect_tool():
 
 def _system_prompt(exp: dict, has_browser: bool) -> str:
     inspect = (
-        "2. INSPECT: Once you have BOTH URLs, call `inspect_variant_pages(variant_a_url, "
-        "variant_b_url)` with the two URLs the PM gave you. Pass them verbatim — do not "
-        "modify query parameters. It opens both pages in a real browser and returns their "
-        "rendered content. Read both snapshots and note what actually differs between A and B."
+        "2. INSPECT: Call `inspect_variant_pages(variant_a_url, variant_b_url)` with the "
+        "URLs from the experiment context above. Pass them verbatim — do not modify query "
+        "parameters. It opens both pages in a real browser and returns their rendered "
+        "content. Read both snapshots and note what actually differs between A and B."
         if has_browser
         else "2. INSPECT: Browser tools are unavailable. Ask the PM to describe what "
         "differs between the two versions, and rely on that description."
@@ -195,8 +194,9 @@ graph the A/B data, explain results for THIS experiment, questions about the wor
 OFF-TOPIC (decline briefly): general capabilities, unrelated trivia, coding help on
 other products, personal questions. Use the one-line steer-back ONLY for off-topic asks.
 
-If the PM asks to analyze, compare, chart, or graph experiment data but has NOT pasted
-both variant URLs yet, ask them once for both links — do NOT treat that as off-topic.
+If the PM asks for a FULL analysis (with page inspection and final verdict) and the
+experiment context above shows both variant URLs are set, use those URLs directly —
+do NOT ask the PM to paste them again. Only ask for URLs if they are "(not set — ask PM)".
 
 The chat UI renders bar charts, funnels, and tables automatically from stored telemetry.
 Do not draw ASCII charts in prose. For visualization-only requests (chart/graph/breakdown
@@ -241,14 +241,12 @@ via ask_data_analyst that the event exists before using it).
 Event data: use ask_data_analyst to discover schema and fetch aggregates for experiment
 `{exp['id']}`. Never write SQL yourself — delegate all database questions to ask_data_analyst.
 
-When the PM asks you to analyze / compare / recommend / chart / graph / visualize,
+When the PM asks you to analyze / compare / recommend,
 follow this workflow:
-1. GET URLS: Use variant_a_url and variant_b_url from the experiment context above when
-   set. Otherwise extract BOTH variant URLs from the PM's messages in this thread.
+1. GET URLS: The experiment context above already contains variant_a_url and variant_b_url.
+   Use those directly — do NOT ask the PM to provide them unless they show "(not set — ask PM)".
    - Pass URLs verbatim to inspect_variant_pages — do NOT modify query parameters.
-   - If you do NOT have both URLs, ask the PM once to paste both links and STOP.
-     Do not call inspect_variant_pages, ask_data_analyst, run_statistics, or
-     submit_decision until both URLs are available.
+   - Only ask the PM for URLs if both are literally "(not set — ask PM)" in the context above.
 {inspect}
 3. INFER: From the page diff + ask_data_analyst (list events for this experiment),
    choose ONE success metric from events that actually exist. State why. Exposure is
@@ -321,7 +319,7 @@ async def build_agent(exp: dict, budget: ToolCallBudget):
     tools = [
         run_statistics,
         make_decision_tool(capture),
-        make_ask_data_analyst_tool(),
+        make_ask_data_analyst_tool(experiment_id=exp["id"]),
     ]
     if has_browser:
         tools.append(make_inspect_tool())
