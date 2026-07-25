@@ -3,8 +3,8 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm install
 COPY . .
-ARG VITE_API_BASE
-ENV VITE_API_BASE=$VITE_API_BASE
+ARG VITE_API_BASE=https://ecom-backend-production-1fb9.up.railway.app
+ENV VITE_API_BASE=${VITE_API_BASE}
 RUN npm run build
 
 FROM nginx:alpine
