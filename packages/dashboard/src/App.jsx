@@ -8,6 +8,7 @@ import {
   analyze,
   demoReset,
   createExperiment,
+  deleteExperiment,
   experimentIdForVariation,
 } from './api.js';
 import {
@@ -458,6 +459,27 @@ export default function App() {
     }
   };
 
+  const handleDeleteExperiment = async () => {
+    if (!customExp) return;
+    if (!window.confirm(`Delete experiment "${customExp.label}"? This removes all data.`)) return;
+    try {
+      await deleteExperiment(customExp.experimentId);
+      setCustomExperiments((prev) => prev.filter((e) => e.id !== customExp.id));
+      const fallback = 'checkout-cta';
+      saveActiveVariation(fallback);
+      setActiveVariationId(fallback);
+      const fallbackSessions = readSessions(experimentIdForVariation(fallback));
+      setSessions(fallbackSessions);
+      setActiveSessionId(fallbackSessions[0].id);
+      setSimMeta(null);
+      setError('');
+      await load({ experimentIdOverride: experimentIdForVariation(fallback) });
+      setToast('Experiment deleted.');
+    } catch (e) {
+      setError(e.message);
+    }
+  };
+
   const activeVariationMeta = VARIATION_CATALOG[activeVariationId];
 
   if (!exp) {
@@ -516,6 +538,16 @@ export default function App() {
                 <option value="__create_new__">+ New Experiment</option>
               </select>
             </label>
+            {customExp && (
+              <button
+                type="button"
+                className="btn btn-danger-ghost"
+                onClick={handleDeleteExperiment}
+                title="Delete this experiment"
+              >
+                Delete
+              </button>
+            )}
             <button
               type="button"
               className="icon-btn theme-toggle"

@@ -834,6 +834,18 @@ body {
 
 .btn-ghost:hover { background: var(--surface-hover); }
 
+.btn-danger-ghost {
+  background: transparent;
+  color: #ef4444;
+  border: 1px solid #ef4444;
+  padding: 0.35rem 0.75rem;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.btn-danger-ghost:hover { background: #ef4444; color: #fff; }
+
 .btn-secondary {
   background: var(--surface-hover);
   color: var(--text);

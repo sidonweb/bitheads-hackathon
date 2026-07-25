@@ -53,6 +53,12 @@ export async function createExperiment({ id, name, hypothesis, variantAName, var
   return res.json();
 }
 
+export async function deleteExperiment(id) {
+  const res = await fetch(`${API_BASE}/experiments/${id}`, { method: 'DELETE' });
+  if (!res.ok) throw await parseApiError(res);
+  return res.json();
+}
+
 export async function setTrafficSplit(id, trafficSplit) {
   const res = await fetch(`${API_BASE}/experiments/${id}`, {
     method: 'PATCH',
