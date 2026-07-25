@@ -7,6 +7,7 @@ import {
   newSessionId,
   analyze,
   demoReset,
+  createExperiment,
   experimentIdForVariation,
 } from './api.js';
 import {
@@ -106,11 +107,16 @@ export default function App() {
   const [applyState, setApplyState] = useState('idle');
   const [applyError, setApplyError] = useState('');
   const [toast, setToast] = useState('');
+  const [createExpModalOpen, setCreateExpModalOpen] = useState(false);
+  const [customExperiments, setCustomExperiments] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('copilot_custom_experiments') || '[]'); } catch { return []; }
+  });
 
   const prevRefreshing = useRef(false);
   const pulseTimer = useRef(null);
 
-  const activeExperimentId = experimentIdForVariation(activeVariationId);
+  const customExp = customExperiments.find((e) => e.id === activeVariationId);
+  const activeExperimentId = customExp ? customExp.experimentId : experimentIdForVariation(activeVariationId);
   const orderedSessions = sortSessions(sessions);
   const activeSession = sessions.find((session) => session.id === activeSessionId) || sessions[0];
   const renameSessionTarget = sessions.find((session) => session.id === renameSessionId);
@@ -186,6 +192,7 @@ export default function App() {
 
   useEffect(() => { applyTheme(theme); }, [theme]);
   useEffect(() => { localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions)); }, [sessions]);
+  useEffect(() => { localStorage.setItem('copilot_custom_experiments', JSON.stringify(customExperiments)); }, [customExperiments]);
 
   useEffect(() => {
     if (!activeSession && sessions.length > 0) setActiveSessionId(sessions[0].id);
@@ -386,12 +393,42 @@ export default function App() {
   };
 
   const handleVariationChange = async (nextId) => {
+    if (nextId === '__create_new__') {
+      setCreateExpModalOpen(true);
+      return;
+    }
     if (nextId === activeVariationId) return;
     saveActiveVariation(nextId);
     setActiveVariationId(nextId);
     setSimMeta(null);
     setError('');
-    await applyVariationPreset(nextId);
+    const isCustom = customExperiments.some((e) => e.id === nextId);
+    if (!isCustom) {
+      await applyVariationPreset(nextId);
+    } else {
+      const ce = customExperiments.find((e) => e.id === nextId);
+      await load({ experimentIdOverride: ce.experimentId });
+    }
+  };
+
+  const handleCreateCustomExperiment = async ({ name, hypothesis, variantAName, variantBName }) => {
+    const nextNum = customExperiments.length + Object.keys(VARIATION_CATALOG).length + 1;
+    const expId = `exp_${nextNum}`;
+    const customId = `custom-${expId}`;
+    try {
+      await createExperiment({ id: expId, name, hypothesis, variantAName, variantBName });
+      const newEntry = { id: customId, experimentId: expId, label: name, name, hypothesis, variantAName, variantBName };
+      setCustomExperiments((prev) => [...prev, newEntry]);
+      setCreateExpModalOpen(false);
+      saveActiveVariation(customId);
+      setActiveVariationId(customId);
+      setSimMeta(null);
+      setError('');
+      await load({ experimentIdOverride: expId });
+      setToast(`Experiment "${name}" created.`);
+    } catch (e) {
+      setError(e.message);
+    }
   };
 
   const activeVariationMeta = VARIATION_CATALOG[activeVariationId];
@@ -444,6 +481,12 @@ export default function App() {
                     {item.label}
                   </option>
                 ))}
+                {customExperiments.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.label}
+                  </option>
+                ))}
+                <option value="__create_new__">+ New Experiment</option>
               </select>
             </label>
             <button
@@ -537,6 +580,63 @@ export default function App() {
         onCancel={() => setDeleteSessionId(null)}
         onConfirm={() => deleteSession(deleteSessionTarget.id)}
       />
+
+      {createExpModalOpen && (
+        <CreateExperimentModal
+          onCancel={() => setCreateExpModalOpen(false)}
+          onConfirm={handleCreateCustomExperiment}
+        />
+      )}
+    </div>
+  );
+}
+
+function CreateExperimentModal({ onCancel, onConfirm }) {
+  const [name, setName] = useState('');
+  const [hypothesis, setHypothesis] = useState('');
+  const [variantAName, setVariantAName] = useState('');
+  const [variantBName, setVariantBName] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!name.trim()) return;
+    setBusy(true);
+    await onConfirm({ name: name.trim(), hypothesis: hypothesis.trim(), variantAName: variantAName.trim() || 'Control', variantBName: variantBName.trim() || 'Treatment' });
+    setBusy(false);
+  };
+
+  return (
+    <div className="modal-backdrop" onClick={onCancel}>
+      <div className="modal-panel create-exp-modal" onClick={(e) => e.stopPropagation()}>
+        <h2>Create New Experiment</h2>
+        <form onSubmit={handleSubmit}>
+          <label className="form-field">
+            <span>Experiment Name *</span>
+            <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Homepage Banner Test" autoFocus required />
+          </label>
+          <label className="form-field">
+            <span>Hypothesis</span>
+            <textarea value={hypothesis} onChange={(e) => setHypothesis(e.target.value)} placeholder="What do you expect to happen?" rows={2} />
+          </label>
+          <div className="form-row">
+            <label className="form-field">
+              <span>Variant A (Control)</span>
+              <input type="text" value={variantAName} onChange={(e) => setVariantAName(e.target.value)} placeholder="Control" />
+            </label>
+            <label className="form-field">
+              <span>Variant B (Treatment)</span>
+              <input type="text" value={variantBName} onChange={(e) => setVariantBName(e.target.value)} placeholder="Treatment" />
+            </label>
+          </div>
+          <div className="modal-actions">
+            <button type="button" className="btn btn-ghost" onClick={onCancel} disabled={busy}>Cancel</button>
+            <button type="submit" className="btn btn-primary" disabled={busy || !name.trim()}>
+              {busy ? 'Creating...' : 'Create Experiment'}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }

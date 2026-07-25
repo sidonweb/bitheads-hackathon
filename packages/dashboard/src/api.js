@@ -33,6 +33,23 @@ export async function listExperiments() {
   return res.json();
 }
 
+export async function createExperiment({ id, name, hypothesis, variantAName, variantBName }) {
+  const res = await fetch(`${API_BASE}/experiments`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      id,
+      name,
+      hypothesis: hypothesis || '',
+      variantAName: variantAName || 'Control',
+      variantBName: variantBName || 'Treatment',
+      trafficSplit: 50,
+    }),
+  });
+  if (!res.ok) throw await parseApiError(res);
+  return res.json();
+}
+
 export async function setTrafficSplit(id, trafficSplit) {
   const res = await fetch(`${API_BASE}/experiments/${id}`, {
     method: 'PATCH',
