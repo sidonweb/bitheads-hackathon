@@ -1,8 +1,8 @@
 from fastapi import APIRouter, HTTPException, Query
 
-from ..config import DEMO_MODE, ECOM_WEB_URL, EXPERIMENT_ID
+from ..config import DEMO_MODE, ECOM_WEB_URL
 from ..db import admin_engine
-from ..demo.scenarios import DEFAULT_VARIATION, SCENARIO_IDS
+from ..demo.scenarios import DEFAULT_VARIATION, SCENARIO_IDS, experiment_id_for_variation
 from ..demo.seed_lib import reset_and_seed
 from ..demo.simulate import simulate_traffic
 
@@ -40,15 +40,16 @@ def demo_simulate(
     users: int = Query(500, ge=1, le=10_000),
     convA: float = Query(0.158, ge=0.0, le=1.0),
     convB: float = Query(0.18, ge=0.0, le=1.0),
-    experimentId: str = Query(EXPERIMENT_ID),
+    experimentId: str | None = Query(None),
     variation: str = Query(DEFAULT_VARIATION),
 ):
     _require_demo_mode()
+    resolved_id = experimentId or experiment_id_for_variation(variation)
     try:
         with admin_engine.begin() as conn:
             result = simulate_traffic(
                 conn,
-                experiment_id=experimentId,
+                experiment_id=resolved_id,
                 users=users,
                 conv_a=convA,
                 conv_b=convB,

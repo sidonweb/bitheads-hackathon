@@ -22,6 +22,7 @@ function buildSuggestions(experiment) {
 
 export default function ChatPanel({
   experiment,
+  experimentId,
   onDecision,
   decision,
   sessionId,
@@ -87,7 +88,7 @@ export default function ChatPanel({
   };
 
   const sendWithFallback = async (text, withUserMessage) => {
-    const res = await chat(text, sessionId);
+    const res = await chat(text, sessionId, experimentId);
     finalizeAssistant(withUserMessage, res.reply, { blocks: res.blocks || [] });
     if (res.warning) setWarning(res.warning);
     if (res.decision) onDecision?.(res.decision);
@@ -194,7 +195,7 @@ export default function ChatPanel({
     };
 
     try {
-      await chatStream(text, sessionId, handleEvent, ac.signal);
+      await chatStream(text, sessionId, handleEvent, ac.signal, experimentId);
 
       if (ac.signal.aborted || abortRef.current !== ac) return;
 

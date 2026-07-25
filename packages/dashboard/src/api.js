@@ -1,7 +1,7 @@
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3001';
 const ECOM_API_BASE = import.meta.env.VITE_ECOM_API_BASE || 'http://localhost:3002';
-export const EXPERIMENT_ID = import.meta.env.VITE_EXPERIMENT_ID || 'exp_1';
-export { VARIATION_IDS, VARIATION_CATALOG, buildVariationUrls } from './lib/variationCatalog.js';
+export const EXPERIMENT_ID = import.meta.env.VITE_EXPERIMENT_ID || 'exp_checkout_cta';
+export { VARIATION_IDS, VARIATION_CATALOG, buildVariationUrls, experimentIdForVariation } from './lib/variationCatalog.js';
 export { API_BASE, ECOM_API_BASE };
 export { DEMO_MODE } from './lib/demoSim.js';
 

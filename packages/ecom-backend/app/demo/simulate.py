@@ -4,7 +4,7 @@ import random
 from sqlalchemy import text
 
 from ..flag import assign_variant
-from .scenarios import EXPERIMENT_ID, EXPOSURE, FULL_FUNNEL, VARIATION_PRESETS, get_variation_preset, DEFAULT_VARIATION
+from .scenarios import EXPOSURE, FULL_FUNNEL, VARIATION_PRESETS, get_variation_preset, DEFAULT_VARIATION, experiment_id_for_variation
 
 
 def _metric_value(event_name: str, primary_metric: str) -> float:
@@ -14,7 +14,7 @@ def _metric_value(event_name: str, primary_metric: str) -> float:
 def simulate_traffic(
     conn,
     *,
-    experiment_id: str = EXPERIMENT_ID,
+    experiment_id: str | None = None,
     users: int,
     conv_a: float,
     conv_b: float,
@@ -23,6 +23,9 @@ def simulate_traffic(
 ) -> dict:
     if users < 1 or users > 10_000:
         raise ValueError("users must be between 1 and 10000")
+
+    if experiment_id is None:
+        experiment_id = experiment_id_for_variation(variation_id or DEFAULT_VARIATION)
 
     row = conn.execute(
         text("SELECT traffic_split FROM experiments WHERE id = :id"),
@@ -137,7 +140,7 @@ def _insert_batch(conn, batch: list[dict]) -> None:
 
 def simulate_summary(
     conn,
-    experiment_id: str = EXPERIMENT_ID,
+    experiment_id: str,
     primary_metric: str | None = None,
 ) -> list[dict]:
     if primary_metric is None:

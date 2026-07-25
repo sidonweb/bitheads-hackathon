@@ -1,9 +1,20 @@
-"""Demo scenario profiles — variation presets for storefront UI; one experiment row in DB."""
+"""Demo scenario profiles — variation presets for storefront UI; each variation is its own experiment."""
 
 import os
 
 EXPERIMENT_ID = os.getenv("EXPERIMENT_ID", "exp_1")
 DEFAULT_VARIATION = "checkout-cta"
+
+VARIATION_EXPERIMENT_IDS = {
+    "checkout-cta": "exp_checkout_cta",
+    "plp-social-proof": "exp_plp_social_proof",
+    "pdp-sticky-cta": "exp_pdp_sticky_cta",
+    "cart-shipping-nudge": "exp_cart_shipping_nudge",
+}
+
+
+def experiment_id_for_variation(variation_id: str) -> str:
+    return VARIATION_EXPERIMENT_IDS.get(variation_id, EXPERIMENT_ID)
 
 # Full funnel vocabulary — always seeded/simulated so any variation can be analyzed.
 EXPOSURE = "page_view"

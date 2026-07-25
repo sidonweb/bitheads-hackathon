@@ -6,7 +6,8 @@ import {
   patchExperiment,
   newSessionId,
   analyze,
-  EXPERIMENT_ID,
+  demoReset,
+  experimentIdForVariation,
 } from './api.js';
 import {
   readActiveVariation,
@@ -109,15 +110,17 @@ export default function App() {
   const prevRefreshing = useRef(false);
   const pulseTimer = useRef(null);
 
+  const activeExperimentId = experimentIdForVariation(activeVariationId);
   const orderedSessions = sortSessions(sessions);
   const activeSession = sessions.find((session) => session.id === activeSessionId) || sessions[0];
   const renameSessionTarget = sessions.find((session) => session.id === renameSessionId);
   const deleteSessionTarget = sessions.find((session) => session.id === deleteSessionId);
 
   const load = useCallback((options = {}) => {
-    const { isInitial = false } = options;
+    const { isInitial = false, experimentIdOverride } = options;
+    const expIdToLoad = experimentIdOverride || activeExperimentId;
     setRefreshing(true);
-    return getExperiment()
+    return getExperiment(expIdToLoad)
       .then((d) => {
         setExp(d.experiment);
         setEventMatrix(d.eventMatrix);
@@ -129,19 +132,36 @@ export default function App() {
         if (d.experiment.variant_a_url) setVariantAUrl(d.experiment.variant_a_url);
         if (d.experiment.variant_b_url) setVariantBUrl(d.experiment.variant_b_url);
       })
-      .catch((e) => {
+      .catch(async (e) => {
+        const is404 = e.message?.includes('404') || e.message?.includes('not found');
+        if (is404 && isInitial) {
+          try {
+            await demoReset('scale', expIdToLoad, activeVariationId);
+            const d = await getExperiment(expIdToLoad);
+            setExp(d.experiment);
+            setEventMatrix(d.eventMatrix);
+            setSplit(d.experiment.traffic_split);
+            setInitialLoadDone(true);
+            if (d.experiment.variant_a_url) setVariantAUrl(d.experiment.variant_a_url);
+            if (d.experiment.variant_b_url) setVariantBUrl(d.experiment.variant_b_url);
+          } catch {
+            setError('Experiment not found.');
+            setPollStopped(true);
+          }
+          return;
+        }
         if (isInitial || !initialLoadDone) {
           setError(e.message);
         } else {
           setMetricsRefreshError('Could not refresh metrics. Showing last loaded data.');
         }
-        if (e.message?.includes('404') || e.message?.includes('not found')) {
+        if (is404) {
           setPollStopped(true);
           setError('Experiment not found.');
         }
       })
       .finally(() => setRefreshing(false));
-  }, [initialLoadDone]);
+  }, [initialLoadDone, activeExperimentId]);
 
   useEffect(() => {
     load({ isInitial: true });
@@ -185,7 +205,7 @@ export default function App() {
 
   const onSplitCommit = async (value) => {
     setSplit(value);
-    try { await setTrafficSplit(EXPERIMENT_ID, value); } catch (e) { setError(e.message); }
+    try { await setTrafficSplit(activeExperimentId, value); } catch (e) { setError(e.message); }
   };
 
   const updateActiveSession = (updater) => {
@@ -237,7 +257,7 @@ export default function App() {
     setAnalyzeBusy(true);
     setError('');
     try {
-      const result = await analyze({ variantAUrl: urlA, variantBUrl: urlB });
+      const result = await analyze({ variantAUrl: urlA, variantBUrl: urlB, id: activeExperimentId });
       onDecision(result.decision);
       updateActiveSession((session) => ({
         ...session,
@@ -272,7 +292,7 @@ export default function App() {
     setApplyState('loading');
     setApplyError('');
     try {
-      await setTrafficSplit(EXPERIMENT_ID, targetSplit);
+      await setTrafficSplit(activeExperimentId, targetSplit);
       setSplit(targetSplit);
       setApplyState('applied');
       setApplyModalOpen(false);
@@ -339,6 +359,7 @@ export default function App() {
   const applyVariationPreset = async (nextId) => {
     const preset = VARIATION_CATALOG[nextId];
     if (!preset) return;
+    const nextExpId = experimentIdForVariation(nextId);
     const urls = buildVariationUrls(nextId);
     setVariantAUrl(urls.variantAUrl);
     setVariantBUrl(urls.variantBUrl);
@@ -346,16 +367,21 @@ export default function App() {
       await patchExperiment({
         variantAUrl: urls.variantAUrl,
         variantBUrl: urls.variantBUrl,
-      });
-      await saveHypothesis(EXPERIMENT_ID, {
+      }, nextExpId);
+      await saveHypothesis(nextExpId, {
         name: preset.name,
         hypothesis: preset.hypothesis,
         variantAName: preset.variantAName,
         variantBName: preset.variantBName,
       });
-      await load();
+      await load({ experimentIdOverride: nextExpId });
     } catch (e) {
-      setError(e.message);
+      if (e.message?.includes('not found') || e.code === 'NOT_FOUND') {
+        await demoReset('scale', nextExpId, nextId);
+        await load({ experimentIdOverride: nextExpId });
+      } else {
+        setError(e.message);
+      }
     }
   };
 
@@ -455,6 +481,7 @@ export default function App() {
               key={activeSession.id}
               sessionId={activeSession.id}
               experiment={exp}
+              experimentId={activeExperimentId}
               onDecision={onDecision}
               decision={activeSession.decision}
               messages={activeSession.messages}
@@ -473,7 +500,7 @@ export default function App() {
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
         experiment={exp}
-        experimentId={EXPERIMENT_ID}
+        experimentId={activeExperimentId}
         variationId={activeVariationId}
         variationMeta={activeVariationMeta}
         split={split}

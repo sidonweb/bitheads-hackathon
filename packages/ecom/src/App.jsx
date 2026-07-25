@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { fetchVariant } from './lib/flag.js';
 import { track } from './lib/track.js';
 import { resolveVariation } from './lib/variations.js';
+import { experimentIdForVariation } from './config.js';
 import { CATALOG } from './data/catalog.js';
 import Header from './components/Header.jsx';
 import ProductGrid from './components/ProductGrid.jsx';
@@ -41,11 +42,13 @@ export default function App() {
   const [selected, setSelected] = useState(null);
   const [cart, setCart] = useState([]);
 
+  const expId = experimentIdForVariation(variation);
+
   useEffect(() => {
-    fetchVariant()
+    fetchVariant(expId)
       .then((f) => {
         setVariant(f.variantId);
-        track('page_view', f.variantId);
+        track('page_view', f.variantId, 0, expId);
       })
       .catch(() => setVariant('A'));
 
@@ -78,16 +81,16 @@ export default function App() {
   const addToCart = (qty) => {
     const items = Array.from({ length: qty }, () => selected);
     setCart((c) => [...c, ...items]);
-    track('add_to_cart', variant);
+    track('add_to_cart', variant, 0, expId);
     setStage('cart');
   };
   const removeItem = (idx) => setCart((c) => c.filter((_, i) => i !== idx));
   const goCheckout = () => {
-    track('checkout_started', variant);
+    track('checkout_started', variant, 0, expId);
     setStage('checkout');
   };
   const complete = () => {
-    track('checkout_completed', variant, 1);
+    track('checkout_completed', variant, 1, expId);
     setStage('done');
   };
   const shopAgain = () => {

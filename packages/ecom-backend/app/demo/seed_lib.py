@@ -4,10 +4,10 @@ from sqlalchemy import text
 
 from .scenarios import (
     DEFAULT_VARIATION,
-    EXPERIMENT_ID,
     SCENARIOS,
     SCENARIO_IDS,
     VARIATION_PRESETS,
+    experiment_id_for_variation,
     variation_urls,
 )
 
@@ -28,10 +28,17 @@ def reset_and_seed(
 
     cfg = SCENARIOS[scenario_id]
     preset = VARIATION_PRESETS[variation_id]
+    exp_id = experiment_id_for_variation(variation_id)
     va_url, vb_url = variation_urls(ecom_web_url, variation_id)
 
-    conn.execute(text("TRUNCATE universal_events RESTART IDENTITY"))
-    conn.execute(text("DELETE FROM experiments"))
+    conn.execute(
+        text("DELETE FROM universal_events WHERE experiment_id = :id"),
+        {"id": exp_id},
+    )
+    conn.execute(
+        text("DELETE FROM experiments WHERE id = :id"),
+        {"id": exp_id},
+    )
 
     conn.execute(
         text(
@@ -45,7 +52,7 @@ def reset_and_seed(
             """
         ),
         {
-            "id": EXPERIMENT_ID,
+            "id": exp_id,
             "name": preset["name"],
             "hyp": preset["hypothesis"],
             "va": preset["variant_a_name"],
@@ -62,7 +69,7 @@ def reset_and_seed(
         "expectedVerdict": cfg["expected_verdict"],
         "eventsInserted": 0,
         "summary": [],
-        "experimentId": EXPERIMENT_ID,
+        "experimentId": exp_id,
         "variation": variation_id,
         "variantAUrl": va_url,
         "variantBUrl": vb_url,

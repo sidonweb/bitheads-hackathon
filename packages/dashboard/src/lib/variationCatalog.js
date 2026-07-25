@@ -12,6 +12,7 @@ export const ECOM_WEB_BASE = import.meta.env.VITE_ECOM_WEB_URL || 'http://localh
 export const VARIATION_CATALOG = {
   'checkout-cta': {
     id: 'checkout-cta',
+    experimentId: 'exp_checkout_cta',
     label: 'Checkout CTA Redesign',
     name: 'Checkout CTA Redesign',
     hypothesis: "Variant B's redesigned checkout CTA increases checkout conversion vs Variant A.",
@@ -22,6 +23,7 @@ export const VARIATION_CATALOG = {
   },
   'plp-social-proof': {
     id: 'plp-social-proof',
+    experimentId: 'exp_plp_social_proof',
     label: 'PLP Social Proof',
     name: 'PLP Social Proof',
     hypothesis: 'Showing star ratings and review counts on product cards increases add-to-cart rate.',
@@ -32,6 +34,7 @@ export const VARIATION_CATALOG = {
   },
   'pdp-sticky-cta': {
     id: 'pdp-sticky-cta',
+    experimentId: 'exp_pdp_sticky_cta',
     label: 'PDP Sticky CTA',
     name: 'PDP Sticky CTA',
     hypothesis: 'A sticky bottom add-to-cart bar on product detail increases add-to-cart rate.',
@@ -42,6 +45,7 @@ export const VARIATION_CATALOG = {
   },
   'cart-shipping-nudge': {
     id: 'cart-shipping-nudge',
+    experimentId: 'exp_cart_shipping_nudge',
     label: 'Cart Free-Shipping Nudge',
     name: 'Cart Free-Shipping Nudge',
     hypothesis: 'A free-shipping progress bar nudges more users from cart into checkout.',
@@ -51,6 +55,10 @@ export const VARIATION_CATALOG = {
     defaultConvB: 19.5,
   },
 };
+
+export function experimentIdForVariation(variationId) {
+  return VARIATION_CATALOG[variationId]?.experimentId || 'exp_checkout_cta';
+}
 
 const STORAGE_KEY = 'copilot_active_variation';
 

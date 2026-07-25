@@ -2,10 +2,10 @@ import { API_BASE, EXPERIMENT_ID } from '../config.js';
 import { getUserId } from './user.js';
 
 // Fire-and-forget telemetry. Never blocks the UI; failures are swallowed.
-export function track(eventName, variantId, metricValue = 0) {
+export function track(eventName, variantId, metricValue = 0, experimentId = EXPERIMENT_ID) {
   const payload = {
     userId: getUserId(),
-    experimentId: EXPERIMENT_ID,
+    experimentId,
     variantId,
     eventName,
     metricValue,
