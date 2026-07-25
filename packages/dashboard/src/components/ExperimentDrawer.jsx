@@ -90,7 +90,7 @@ export default function ExperimentDrawer({
         convA: toConvFraction(convA),
         convB: toConvFraction(convB),
         id: experimentId,
-        variation: variationId,
+        variation: variationId?.startsWith('custom-') ? null : variationId,
       });
       onSimulateComplete?.({
         usersSimulated: res.usersSimulated,
@@ -108,7 +108,7 @@ export default function ExperimentDrawer({
     setResetBusy(true);
     setError('');
     try {
-      const res = await demoReset(scenario, experimentId, variationId);
+      const res = await demoReset(scenario, experimentId, variationId?.startsWith('custom-') ? null : variationId);
       setScenarioLabel(res.label || '');
       onDemoReset?.(res);
       await onRefresh();

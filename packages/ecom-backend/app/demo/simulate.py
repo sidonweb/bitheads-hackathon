@@ -46,8 +46,11 @@ def simulate_traffic(
         ).mappings().first()
         variation_id = _variation_from_name(name_row["name"] if name_row else "")
 
-    preset = get_variation_preset(variation_id)
-    primary_metric = preset["primary_metric"]
+    try:
+        preset = get_variation_preset(variation_id)
+        primary_metric = preset["primary_metric"]
+    except ValueError:
+        primary_metric = "checkout_completed"
 
     conn.execute(
         text("DELETE FROM universal_events WHERE experiment_id = :id"),
