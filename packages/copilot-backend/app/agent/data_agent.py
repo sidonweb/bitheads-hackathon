@@ -53,14 +53,15 @@ def _extract_sql(text: str) -> str:
     return text.strip().strip("`")
 
 
-async def _generate_sql(llm, schema_context: str, question: str, prior_error: str = "") -> str:
+async def _generate_sql(llm, schema_context: str, question: str, experiment_id: str, prior_error: str = "") -> str:
     system = (
         "You write exactly ONE PostgreSQL SELECT query. Output ONLY the SQL — no prose, no markdown.\n"
-        "Rules: SELECT only; scope by experiment_id when provided; use FILTER aggregates for event counts;\n"
+        f"Rules: SELECT only; ALWAYS filter by experiment_id = '{experiment_id}'; "
+        "use FILTER aggregates for event counts;\n"
         "never INSERT/UPDATE/DELETE; prefer GROUP BY variant_id for A/B comparisons.\n"
         "Use only column names from the schema (event_name, not event_type)."
     )
-    user = f"Schema:\n{schema_context}\n\nQuestion: {question}"
+    user = f"Schema:\n{schema_context}\n\nExperiment ID: {experiment_id}\n\nQuestion: {question}"
     if prior_error:
         user += (
             f"\n\nPrevious query failed: {prior_error}\n"
@@ -88,7 +89,7 @@ def _summarize_rows(question: str, payload: dict) -> str:
     )
 
 
-async def run_data_agent(question: str) -> dict:
+async def run_data_agent(question: str, experiment_id: str = "exp_1") -> dict:
     """Discover schema, generate one SELECT, execute, return structured answer."""
     schema_context, table_names = _bootstrap_schema()
     llm = _build_llm()
@@ -96,7 +97,7 @@ async def run_data_agent(question: str) -> dict:
     last_error = ""
 
     for _attempt in range(2):
-        sql_text = await _generate_sql(llm, schema_context, question, last_error)
+        sql_text = await _generate_sql(llm, schema_context, question, experiment_id, last_error)
         result = json.loads(run_readonly_query.invoke({"sql_text": sql_text}))
         sql_used.append(result.get("sql", sql_text))
         if result.get("error"):
@@ -117,13 +118,14 @@ async def run_data_agent(question: str) -> dict:
     }
 
 
-def make_ask_data_analyst_tool():
+def make_ask_data_analyst_tool(experiment_id: str = "exp_1"):
     @tool
     async def ask_data_analyst(question: str) -> str:
         """Ask the read-only data analyst to discover schema and run SQL.
-        Include experiment id and what aggregates you need. Returns JSON with
-        answer, sql_used, tables_used."""
-        result = await run_data_agent(question)
+        Describe what aggregates you need in plain English. The analyst
+        automatically scopes queries to the current experiment. Returns JSON
+        with answer, sql_used, tables_used."""
+        result = await run_data_agent(question, experiment_id=experiment_id)
         return json.dumps(result)
 
     return ask_data_analyst

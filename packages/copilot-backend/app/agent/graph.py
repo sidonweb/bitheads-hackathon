@@ -321,7 +321,7 @@ async def build_agent(exp: dict, budget: ToolCallBudget):
     tools = [
         run_statistics,
         make_decision_tool(capture),
-        make_ask_data_analyst_tool(),
+        make_ask_data_analyst_tool(experiment_id=exp["id"]),
     ]
     if has_browser:
         tools.append(make_inspect_tool())

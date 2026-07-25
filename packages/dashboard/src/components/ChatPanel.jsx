@@ -68,6 +68,11 @@ export default function ChatPanel({
     return message.blocks;
   };
 
+  const shouldShowText = (message) => {
+    if (!message.text?.trim()) return false;
+    return true;
+  };
+
   useEffect(() => () => abortRef.current?.abort(), []);
 
   useEffect(() => {
@@ -269,7 +274,7 @@ export default function ChatPanel({
 
         {messages.map((m, i) => {
           const messageBlocks = blocksForMessage(m);
-          const showText = Boolean(m.text?.trim()) && !m.blocks?.some((b) => b.type === 'markdown');
+          const showText = shouldShowText(m);
 
           return (
             <div key={i} className={`turn ${m.role}${m.error ? ' error' : ''}`}>
