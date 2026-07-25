@@ -352,13 +352,6 @@ def build_blocks_for_plan(
 def full_analysis_plan() -> WidgetPlan:
     return WidgetPlan(
         should_render=True,
-        block_types=[
-            "metric_grid",
-            "bar_chart",
-            "funnel_chart",
-            "table",
-            "decision_card",
-            "actions",
-        ],
-        rationale="forced full analysis response",
+        block_types=["metric_grid", "decision_card", "actions"],
+        rationale="analysis verdict without redundant charts",
     )

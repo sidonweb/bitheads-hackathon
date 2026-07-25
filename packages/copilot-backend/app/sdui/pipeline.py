@@ -60,7 +60,7 @@ async def assemble_chat_blocks(
 
     needs_matrix = any(t in plan.block_types for t in ("bar_chart", "funnel_chart", "table"))
     event_matrix = None
-    if plan.should_render and (needs_matrix or decision):
+    if plan.should_render and needs_matrix:
         event_matrix = build_event_matrix(conn, exp["id"], exp.get("primary_metric"))
 
     return build_blocks_for_plan(
@@ -81,10 +81,8 @@ async def assemble_analyze_blocks(
     reply: str,
     decision: dict,
 ) -> list[dict]:
-    event_matrix = build_event_matrix(conn, exp["id"], exp.get("primary_metric"))
     return build_blocks_for_plan(
         full_analysis_plan(),
         reply=reply,
         decision=decision,
-        event_matrix=event_matrix,
     )

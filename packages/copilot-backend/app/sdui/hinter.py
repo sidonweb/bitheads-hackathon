@@ -32,7 +32,7 @@ Rules:
 - Never suggest decision_card, metric_grid, or actions unless has_decision=true.
 - Never suggest bar_chart, funnel_chart, or table unless has_events=true.
 - User asking for graph/chart/breakdown/table/visualize → suggest relevant DATA viz types only.
-- After full analysis with decision → suggest metric_grid, bar_chart, table, decision_card, actions (not all if redundant; prefer chart+table+decision_card for analysis).
+- After full analysis with decision → suggest metric_grid, decision_card, actions only (no charts/tables unless the user asked for viz).
 - Prefer 1–3 widgets, not the full stack every time."""
 
 _ALL_EVENTS_CHART = re.compile(
@@ -66,7 +66,7 @@ def _heuristic_plan(
     if has_decision and _ANALYSIS_KEYWORDS.search(text):
         return WidgetPlan(
             should_render=True,
-            block_types=["metric_grid", "bar_chart", "table", "decision_card", "actions"],
+            block_types=["metric_grid", "decision_card", "actions"],
             rationale="heuristic post-analysis",
         )
 
@@ -93,20 +93,6 @@ async def hint_widgets(
     tool_calls_used: int = 0,
 ) -> WidgetPlan:
     """Return widget plan for this chat turn. Falls back to heuristic if LLM fails."""
-    if has_decision and tool_calls_used > 0:
-        return WidgetPlan(
-            should_render=True,
-            block_types=[
-                "metric_grid",
-                "bar_chart",
-                "funnel_chart",
-                "table",
-                "decision_card",
-                "actions",
-            ],
-            rationale="analysis completed with decision",
-        )
-
     user_prompt = (
         f"User message: {message}\n"
         f"has_decision: {has_decision}\n"
