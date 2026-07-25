@@ -29,8 +29,12 @@ import { readTheme, saveTheme, applyTheme } from './lib/theme.js';
 import { readAutoRefresh, saveAutoRefresh } from './lib/metricsPrefs.js';
 import { logEvalEvent } from './api/evals.js';
 
-const SESSIONS_KEY = 'copilot_chat_sessions_v1';
+const SESSIONS_KEY_PREFIX = 'copilot_chat_sessions_';
 const METRICS_POLL_INTERVAL_MS = Number(import.meta.env.VITE_METRICS_POLL_MS) || 30_000;
+
+function sessionsKey(experimentId) {
+  return `${SESSIONS_KEY_PREFIX}${experimentId}`;
+}
 
 function makeSession(title = 'New test') {
   const now = new Date().toISOString();
@@ -45,9 +49,9 @@ function makeSession(title = 'New test') {
   };
 }
 
-function readSessions() {
+function readSessions(experimentId) {
   try {
-    const parsed = JSON.parse(localStorage.getItem(SESSIONS_KEY) || '[]');
+    const parsed = JSON.parse(localStorage.getItem(sessionsKey(experimentId)) || '[]');
     if (Array.isArray(parsed) && parsed.length > 0) {
       return parsed.map((session) => ({
         ...makeSession(),
@@ -75,8 +79,19 @@ function titleFromMessage(message) {
   return singleLine.length > 44 ? `${singleLine.slice(0, 41)}...` : singleLine;
 }
 
+function resolveInitialExpId() {
+  const varId = readActiveVariation();
+  if (varId.startsWith('custom-')) {
+    try {
+      const customs = JSON.parse(localStorage.getItem('copilot_custom_experiments') || '[]');
+      const match = customs.find((e) => e.id === varId);
+      if (match) return match.experimentId;
+    } catch { /* fallthrough */ }
+  }
+  return experimentIdForVariation(varId);
+}
+
 export default function App() {
-  const [initialSessions] = useState(readSessions);
   const [activeVariationId, setActiveVariationId] = useState(readActiveVariation);
   const [exp, setExp] = useState(null);
   const [eventMatrix, setEventMatrix] = useState(null);
@@ -89,8 +104,8 @@ export default function App() {
   const [theme, setTheme] = useState(readTheme);
   const [refreshing, setRefreshing] = useState(false);
   const [metricsExpanded, setMetricsExpanded] = useState(false);
-  const [sessions, setSessions] = useState(initialSessions);
-  const [activeSessionId, setActiveSessionId] = useState(initialSessions[0].id);
+  const [sessions, setSessions] = useState(() => { const id = resolveInitialExpId(); return readSessions(id); });
+  const [activeSessionId, setActiveSessionId] = useState(() => { const id = resolveInitialExpId(); return readSessions(id)[0].id; });
 
   const [lastRefreshedAt, setLastRefreshedAt] = useState(null);
   const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(readAutoRefresh);
@@ -191,7 +206,7 @@ export default function App() {
   }, [refreshing, metricsRefreshError]);
 
   useEffect(() => { applyTheme(theme); }, [theme]);
-  useEffect(() => { localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions)); }, [sessions]);
+  useEffect(() => { localStorage.setItem(sessionsKey(activeExperimentId), JSON.stringify(sessions)); }, [sessions, activeExperimentId]);
   useEffect(() => { localStorage.setItem('copilot_custom_experiments', JSON.stringify(customExperiments)); }, [customExperiments]);
 
   useEffect(() => {
@@ -402,28 +417,40 @@ export default function App() {
     setActiveVariationId(nextId);
     setSimMeta(null);
     setError('');
+
     const isCustom = customExperiments.some((e) => e.id === nextId);
+    const nextExpId = isCustom
+      ? customExperiments.find((e) => e.id === nextId).experimentId
+      : experimentIdForVariation(nextId);
+    const nextSessions = readSessions(nextExpId);
+    setSessions(nextSessions);
+    setActiveSessionId(nextSessions[0].id);
+
     if (!isCustom) {
       await applyVariationPreset(nextId);
     } else {
-      const ce = customExperiments.find((e) => e.id === nextId);
-      await load({ experimentIdOverride: ce.experimentId });
+      await load({ experimentIdOverride: nextExpId });
     }
   };
 
-  const handleCreateCustomExperiment = async ({ name, hypothesis, variantAName, variantBName }) => {
+  const handleCreateCustomExperiment = async ({ name, hypothesis, variantAName, variantBName, variantAUrl: aUrl, variantBUrl: bUrl }) => {
     const nextNum = customExperiments.length + Object.keys(VARIATION_CATALOG).length + 1;
     const expId = `exp_${nextNum}`;
     const customId = `custom-${expId}`;
     try {
-      await createExperiment({ id: expId, name, hypothesis, variantAName, variantBName });
-      const newEntry = { id: customId, experimentId: expId, label: name, name, hypothesis, variantAName, variantBName };
+      await createExperiment({ id: expId, name, hypothesis, variantAName, variantBName, variantAUrl: aUrl || null, variantBUrl: bUrl || null });
+      const newEntry = { id: customId, experimentId: expId, label: name, name, hypothesis, variantAName, variantBName, variantAUrl: aUrl, variantBUrl: bUrl };
       setCustomExperiments((prev) => [...prev, newEntry]);
       setCreateExpModalOpen(false);
       saveActiveVariation(customId);
       setActiveVariationId(customId);
       setSimMeta(null);
       setError('');
+      if (aUrl) setVariantAUrl(aUrl);
+      if (bUrl) setVariantBUrl(bUrl);
+      const freshSessions = [makeSession()];
+      setSessions(freshSessions);
+      setActiveSessionId(freshSessions[0].id);
       await load({ experimentIdOverride: expId });
       setToast(`Experiment "${name}" created.`);
     } catch (e) {
@@ -596,13 +623,22 @@ function CreateExperimentModal({ onCancel, onConfirm }) {
   const [hypothesis, setHypothesis] = useState('');
   const [variantAName, setVariantAName] = useState('');
   const [variantBName, setVariantBName] = useState('');
+  const [variantAUrl, setVAUrl] = useState('');
+  const [variantBUrl, setVBUrl] = useState('');
   const [busy, setBusy] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!name.trim()) return;
     setBusy(true);
-    await onConfirm({ name: name.trim(), hypothesis: hypothesis.trim(), variantAName: variantAName.trim() || 'Control', variantBName: variantBName.trim() || 'Treatment' });
+    await onConfirm({
+      name: name.trim(),
+      hypothesis: hypothesis.trim(),
+      variantAName: variantAName.trim() || 'Control',
+      variantBName: variantBName.trim() || 'Treatment',
+      variantAUrl: variantAUrl.trim(),
+      variantBUrl: variantBUrl.trim(),
+    });
     setBusy(false);
   };
 
@@ -627,6 +663,16 @@ function CreateExperimentModal({ onCancel, onConfirm }) {
             <label className="form-field">
               <span>Variant B (Treatment)</span>
               <input type="text" value={variantBName} onChange={(e) => setVariantBName(e.target.value)} placeholder="Treatment" />
+            </label>
+          </div>
+          <div className="form-row">
+            <label className="form-field">
+              <span>Variant A URL</span>
+              <input type="url" value={variantAUrl} onChange={(e) => setVAUrl(e.target.value)} placeholder="http://..." />
+            </label>
+            <label className="form-field">
+              <span>Variant B URL</span>
+              <input type="url" value={variantBUrl} onChange={(e) => setVBUrl(e.target.value)} placeholder="http://..." />
             </label>
           </div>
           <div className="modal-actions">

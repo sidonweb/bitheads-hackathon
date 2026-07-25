@@ -94,11 +94,12 @@ export function buildVariationUrls(variationId, base = ECOM_WEB_BASE) {
 
 export function readActiveVariation(defaultId = DEFAULT_VARIATION) {
   const stored = localStorage.getItem(STORAGE_KEY);
-  return VARIATION_IDS.includes(stored) ? stored : defaultId;
+  if (!stored) return defaultId;
+  if (VARIATION_IDS.includes(stored)) return stored;
+  if (stored.startsWith('custom-')) return stored;
+  return defaultId;
 }
 
 export function saveActiveVariation(id) {
-  if (VARIATION_IDS.includes(id)) {
-    localStorage.setItem(STORAGE_KEY, id);
-  }
+  localStorage.setItem(STORAGE_KEY, id);
 }

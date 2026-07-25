@@ -91,6 +91,8 @@ def _summarize_rows(question: str, payload: dict) -> str:
 
 async def run_data_agent(question: str, experiment_id: str = "exp_1") -> dict:
     """Discover schema, generate one SELECT, execute, return structured answer."""
+    import logging
+    logger = logging.getLogger(__name__)
     schema_context, table_names = _bootstrap_schema()
     llm = _build_llm()
     sql_used: list[str] = []
@@ -98,11 +100,14 @@ async def run_data_agent(question: str, experiment_id: str = "exp_1") -> dict:
 
     for _attempt in range(2):
         sql_text = await _generate_sql(llm, schema_context, question, experiment_id, last_error)
+        logger.info("data_agent SQL (attempt %d): %s", _attempt, sql_text)
         result = json.loads(run_readonly_query.invoke({"sql_text": sql_text}))
         sql_used.append(result.get("sql", sql_text))
         if result.get("error"):
             last_error = result["error"]
+            logger.warning("data_agent error (attempt %d): %s", _attempt, last_error)
             continue
+        logger.info("data_agent OK rows=%d", result.get("rowCount", 0))
         return {
             "answer": _summarize_rows(question, result),
             "sql_used": sql_used,
